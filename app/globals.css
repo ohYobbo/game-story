@@ -1178,6 +1178,29 @@ button {
 .console-spec-summary small { color: #736646; font-size: 8px; }
 .console-spec-summary b { margin-top: 3px; color: #b45733; font-size: 14px; }
 
+.sequel-picker {
+  display: grid;
+  grid-template-columns: 1fr 180px;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 3px solid #9b7040;
+  background: #f5df91;
+}
+
+.sequel-picker b,
+.sequel-picker small { display: block; }
+.sequel-picker b { color: #a55430; font-size: 10px; }
+.sequel-picker small { margin-top: 3px; color: #78684d; font-size: 7px; }
+.sequel-picker select {
+  height: 34px;
+  border: 2px solid #77684c;
+  background: #fffdf2;
+  font-family: inherit;
+  font-size: 8px;
+  font-weight: 800;
+}
+
 .hardware-icon {
   position: relative;
   width: 47px;
@@ -1726,6 +1749,107 @@ button {
 .career-options small { display: block; }
 .career-options b { font-size: 11px; }
 .career-options small { margin-top: 4px; color: #81718e; font-size: 8px; }
+
+.merchant-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 9px;
+  padding: 9px;
+  border: 3px solid #8a724e;
+  background: #f2dfa5;
+}
+
+.merchant-face {
+  display: grid;
+  place-items: center;
+  width: 45px;
+  height: 45px;
+  border: 3px solid #604232;
+  border-radius: 50%;
+  background: #e0803f;
+  color: #fff;
+  font-size: 20px;
+  font-weight: 1000;
+}
+
+.merchant-banner b,
+.merchant-banner small { display: block; }
+.merchant-banner b { font-size: 11px; }
+.merchant-banner small { margin-top: 4px; color: #766a54; font-size: 8px; }
+
+.shop-grid,
+.hiring-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.shop-grid > button,
+.hiring-list > button {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 59px;
+  padding: 7px;
+  border: 3px solid #7d887f;
+  background: #fffef5;
+  text-align: left;
+}
+
+.shop-grid > button:disabled {
+  filter: grayscale(1);
+  opacity: .48;
+}
+
+.shop-grid button > span:nth-child(2) b,
+.shop-grid button > span:nth-child(2) small,
+.hiring-list button > span:nth-child(2) b,
+.hiring-list button > span:nth-child(2) small {
+  display: block;
+}
+
+.shop-grid button > span:nth-child(2) b,
+.hiring-list button > span:nth-child(2) b { font-size: 9px; }
+.shop-grid button > span:nth-child(2) small,
+.hiring-list button > span:nth-child(2) small { margin-top: 3px; color: #7b7462; font-size: 7px; }
+.shop-grid button > strong,
+.hiring-list button > strong { color: #b35b33; font-size: 9px; }
+
+.shop-icon,
+.hire-rank {
+  display: grid;
+  place-items: center;
+  min-width: 34px;
+  height: 34px;
+  padding: 0 3px;
+  border: 2px solid #52636a;
+  background: #5f9fb3;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 1000;
+}
+
+.shop-icon.manual { background: #8b73b3; }
+.hire-rank { background: #e3a043; color: #fff7bb; font-size: 7px; }
+
+.marketing-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.marketing-head .modal-intro { flex: 1; }
+.marketing-head > button {
+  padding: 7px 9px;
+  border: 3px solid #68558c;
+  background: #8c73b3;
+  color: #fff;
+  font-size: 8px;
+  font-weight: 900;
+}
 
 .expand-button {
   width: 100%;
@@ -2304,6 +2428,8 @@ button {
   .console-builder label { grid-template-columns: 72px 1fr; font-size: 8px; }
   .console-builder select { height: 35px; border-width: 2px; font-size: 8px; }
   .console-spec-summary span { padding: 7px; border-width: 2px; }
+  .sequel-picker { grid-template-columns: 1fr; gap: 5px; border-width: 2px; }
+  .sequel-picker select { width: 100%; }
   .platform-grid { gap: 5px; }
   .platform-grid button { min-height: 91px; border-width: 2px; }
   .platform-grid i { transform: scale(.8); margin-bottom: 1px; }
@@ -2324,6 +2450,12 @@ button {
   .training-list button { min-height: 58px; border-width: 2px; }
   .training-icon { width: 34px; height: 34px; border-width: 2px; }
   .career-options button { border-width: 2px; }
+  .shop-grid,
+  .hiring-list { grid-template-columns: 1fr; }
+  .shop-grid > button,
+  .hiring-list > button { border-width: 2px; }
+  .marketing-head { align-items: flex-start; }
+  .marketing-head > button { padding: 5px 6px; border-width: 2px; }
   .record-stats { grid-template-columns: repeat(2, 1fr); }
   .fan-segments { grid-template-columns: 1fr; }
   .fan-title { grid-column: auto; }

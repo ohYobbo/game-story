@@ -54,6 +54,8 @@ type Project = {
   debugTarget?: number;
   elapsedWeeks?: number;
   consoleSpec?: ConsoleSpec;
+  sequelOf?: string;
+  itemUses?: number;
 };
 
 type ConsoleSpec = {
@@ -76,6 +78,18 @@ type Release = {
   remainingDemand?: number;
   trend?: number;
   audience?: string;
+  genre?: string;
+  theme?: string;
+  sequelEligible?: boolean;
+};
+
+type Inventory = {
+  funBoost: number;
+  creativityBoost: number;
+  graphicsBoost: number;
+  soundBoost: number;
+  bugSpray: number;
+  energyDrink: number;
 };
 
 type SaveState = {
@@ -102,6 +116,9 @@ type SaveState = {
   careerManuals?: number;
   endingShown?: boolean;
   endingScore?: number;
+  inventory?: Inventory;
+  merchantYear?: number;
+  merchantPurchases?: number;
 };
 
 type EventData = {
@@ -112,7 +129,7 @@ type EventData = {
   reward?: string;
 };
 
-type Modal = "develop" | "contracts" | "staff" | "training" | "career" | "console" | "marketing" | "records" | "review" | "event" | "stage" | null;
+type Modal = "develop" | "contracts" | "staff" | "training" | "career" | "console" | "shop" | "items" | "hire" | "marketing" | "records" | "review" | "event" | "stage" | null;
 
 const INITIAL_STAFF: Staff[] = [
   { id: 1, name: "林小码", role: "程序员", level: 1, code: 18, scenario: 8, art: 7, sound: 4, energy: 100, color: "#ef6351" },
@@ -182,6 +199,32 @@ const INITIAL_FAN_SEGMENTS: FanSegments = {
   male: 58,
   female: 44,
 };
+
+const INITIAL_INVENTORY: Inventory = {
+  funBoost: 0,
+  creativityBoost: 0,
+  graphicsBoost: 0,
+  soundBoost: 0,
+  bugSpray: 0,
+  energyDrink: 0,
+};
+
+const SHOP_ITEMS = [
+  { key: "funBoost" as const, name: "趣味提升书", note: "开发中增加趣味", cost: 620, icon: "F" },
+  { key: "creativityBoost" as const, name: "创意提升书", note: "开发中增加创意", cost: 620, icon: "I" },
+  { key: "graphicsBoost" as const, name: "画面提升书", note: "开发中增加画面", cost: 620, icon: "G" },
+  { key: "soundBoost" as const, name: "音乐提升书", note: "开发中增加音乐", cost: 620, icon: "S" },
+  { key: "bugSpray" as const, name: "漏洞喷雾", note: "立即移除部分漏洞", cost: 480, icon: "!" },
+  { key: "energyDrink" as const, name: "活力汽水", note: "恢复全员体力", cost: 360, icon: "E" },
+];
+
+const HIRING_METHODS = [
+  { name: "员工介绍", note: "便宜，候选人能力普通", cost: 350, quality: 0 },
+  { name: "游戏杂志广告", note: "稳定找到专业人才", cost: 900, quality: 1 },
+  { name: "网络招聘", note: "新人到资深人士都有", cost: 1900, quality: 2 },
+  { name: "校园宣讲会", note: "寻找潜力出众的新人", cost: 2800, quality: 3, level: 2 },
+  { name: "公开选拔会", note: "高价搜罗明星人才", cost: 4800, quality: 4, level: 2 },
+];
 
 const contracts = [
   { name: "商店网页小游戏", target: 115, reward: 850, note: "限期 9 周" },
@@ -327,6 +370,9 @@ export default function Home() {
   const [careerManuals, setCareerManuals] = useState(0);
   const [endingShown, setEndingShown] = useState(false);
   const [endingScore, setEndingScore] = useState(0);
+  const [inventory, setInventory] = useState<Inventory>(INITIAL_INVENTORY);
+  const [merchantYear, setMerchantYear] = useState(0);
+  const [merchantPurchases, setMerchantPurchases] = useState(0);
   const [speed, setSpeed] = useState(1);
   const [paused, setPaused] = useState(false);
   const [modal, setModal] = useState<Modal>(null);
@@ -340,6 +386,7 @@ export default function Home() {
   const [consoleCpu, setConsoleCpu] = useState(CONSOLE_CPUS[0].name);
   const [consoleMedia, setConsoleMedia] = useState(CONSOLE_MEDIA[0].name);
   const [consoleBody, setConsoleBody] = useState(CONSOLE_BODIES[0].name);
+  const [selectedSequelName, setSelectedSequelName] = useState("");
   const [review, setReview] = useState<{
     name: string;
     scores: number[];
@@ -376,7 +423,12 @@ export default function Home() {
         }
       : saved.project;
     setProject(migratedProject);
-    setReleases(saved.releases ?? []);
+    setReleases((saved.releases ?? []).map((item) => ({
+      ...item,
+      genre: item.genre ?? "角色扮演",
+      theme: item.theme ?? "幻想",
+      sequelEligible: item.sequelEligible ?? item.score >= 32,
+    })));
     setCompanyLevel(saved.companyLevel);
     setAwards(saved.awards ?? 0);
     setOwnConsole(saved.ownConsole ?? false);
@@ -391,6 +443,9 @@ export default function Home() {
     setCareerManuals(saved.careerManuals ?? 0);
     setEndingShown(saved.endingShown ?? false);
     setEndingScore(saved.endingScore ?? 0);
+    setInventory(saved.inventory ?? INITIAL_INVENTORY);
+    setMerchantYear(saved.merchantYear ?? 0);
+    setMerchantPurchases(saved.merchantPurchases ?? 0);
   }, []);
 
   const availablePlatforms = useMemo(() => {
@@ -413,6 +468,7 @@ export default function Home() {
     [staff],
   );
   const selectedStaff = staff.find((member) => member.id === selectedStaffId) ?? null;
+  const sequelCandidates = releases.filter((item) => item.sequelEligible && item.genre && item.theme);
   const hasHardwareEngineer = staff.some((member) => member.role === "硬件工程师" || member.role === "黑客");
   const selectedConsoleSpec = useMemo(() => {
     const cpu = CONSOLE_CPUS.find((item) => item.name === consoleCpu) ?? CONSOLE_CPUS[0];
@@ -456,7 +512,7 @@ export default function Home() {
       cash, fans, research, year, month, week, staff, project, releases, companyLevel,
       awards, ownConsole, consoleUsers, lastEventKey, fanSegments, reputation,
       genreExperience, themeExperience, unlockedGenres, unlockedThemes, careerManuals,
-      endingShown, endingScore,
+      endingShown, endingScore, inventory, merchantYear, merchantPurchases,
     };
     window.localStorage.setItem("pixel-studio-save", JSON.stringify(state));
     announce("已保存到这台设备");
@@ -536,19 +592,25 @@ export default function Home() {
     });
     setReputation((value) => clamp(value + reputationChange, 0, 100));
     setResearch((value) => value + 7 + Math.round(totalScore / 8));
-    setReleases((items) => [{
-      name: finished.name,
-      score: totalScore,
-      sales,
-      income,
-      weeks: 0,
-      releasedYear: year,
-      platform: finished.platform,
-      weeklySales: sales,
-      remainingDemand: Math.round(sales * (1.8 + totalScore / 13)),
-      trend: clamp(.68 + totalScore / 100 + finished.hype / 180, .72, 1.12),
-      audience: audience.label,
-    }, ...items].slice(0, 12));
+    setReleases((items) => {
+      const prior = items.map((item) => item.name === finished.sequelOf ? { ...item, sequelEligible: false } : item);
+      return [{
+        name: finished.name,
+        score: totalScore,
+        sales,
+        income,
+        weeks: 0,
+        releasedYear: year,
+        platform: finished.platform,
+        weeklySales: sales,
+        remainingDemand: Math.round(sales * (1.8 + totalScore / 13)),
+        trend: clamp(.68 + totalScore / 100 + finished.hype / 180, .72, 1.12),
+        audience: audience.label,
+        genre: finished.genre,
+        theme: finished.theme,
+        sequelEligible: totalScore >= 32,
+      }, ...prior].slice(0, 12);
+    });
     if (finished.platform === "像素盒子") {
       setConsoleUsers((value) => value + Math.round(sales * 0.18));
     }
@@ -815,12 +877,12 @@ export default function Home() {
         cash, fans, research, year, month, week, staff, project, releases, companyLevel,
         awards, ownConsole, consoleUsers, lastEventKey, fanSegments, reputation,
         genreExperience, themeExperience, unlockedGenres, unlockedThemes, careerManuals,
-        endingShown, endingScore,
+        endingShown, endingScore, inventory, merchantYear, merchantPurchases,
       };
       window.localStorage.setItem("pixel-studio-save", JSON.stringify(state));
     }, 8000);
     return () => window.clearInterval(timer);
-  }, [cash, fans, research, year, month, week, staff, project, releases, companyLevel, awards, ownConsole, consoleUsers, lastEventKey, fanSegments, reputation, genreExperience, themeExperience, unlockedGenres, unlockedThemes, careerManuals, endingShown, endingScore]);
+  }, [cash, fans, research, year, month, week, staff, project, releases, companyLevel, awards, ownConsole, consoleUsers, lastEventKey, fanSegments, reputation, genreExperience, themeExperience, unlockedGenres, unlockedThemes, careerManuals, endingShown, endingScore, inventory, merchantYear, merchantPurchases]);
 
   const openMenu = (nextModal: Modal) => {
     setModal(nextModal);
@@ -837,22 +899,26 @@ export default function Home() {
     if (!platform) return announce("目前没有可用平台");
     if (project) return announce("当前项目完成后才能开发新作");
     if (cash < platform.cost) return announce("资金不足，先接一份外包吧");
-    const comboBoost = GREAT_COMBOS.has(`${selectedGenre}|${selectedTheme}`) ? 5 : 0;
-    const masteryBoost = getKnowledgeLevel(genreExperience[selectedGenre] ?? 0) + getKnowledgeLevel(themeExperience[selectedTheme] ?? 0) - 2;
+    const sequel = releases.find((item) => item.name === selectedSequelName && item.sequelEligible);
+    const gameGenre = sequel?.genre ?? selectedGenre;
+    const gameTheme = sequel?.theme ?? selectedTheme;
+    const comboBoost = GREAT_COMBOS.has(`${gameGenre}|${gameTheme}`) ? 5 : 0;
+    const sequelBoost = sequel ? 7 + Math.floor(sequel.score / 8) : 0;
+    const masteryBoost = getKnowledgeLevel(genreExperience[gameGenre] ?? 0) + getKnowledgeLevel(themeExperience[gameTheme] ?? 0) - 2;
     setCash((value) => value - platform.cost);
     setProject({
       kind: "game",
       name: gameName.trim() || "无名游戏",
       platform: selectedPlatform,
-      genre: selectedGenre,
-      theme: selectedTheme,
+      genre: gameGenre,
+      theme: gameTheme,
       direction: selectedDirection,
       progress: 0,
       target: selectedDirection === "重视品质" ? 330 : selectedDirection === "赶工" ? 210 : 270,
-      fun: 6 + comboBoost + masteryBoost,
-      creativity: 5 + comboBoost + masteryBoost,
-      graphics: 4 + Math.floor(masteryBoost / 2),
-      sound: 3 + Math.floor(masteryBoost / 2),
+      fun: 6 + comboBoost + masteryBoost + sequelBoost,
+      creativity: 5 + comboBoost + masteryBoost + sequelBoost,
+      graphics: 4 + Math.floor(masteryBoost / 2) + sequelBoost,
+      sound: 3 + Math.floor(masteryBoost / 2) + sequelBoost,
       bugs: 0,
       hype: 2,
       marketUsers: platform.users,
@@ -860,7 +926,10 @@ export default function Home() {
       stageProgress: 0,
       stageTarget: getStageTarget("planning", selectedDirection),
       elapsedWeeks: 0,
+      sequelOf: sequel?.name,
+      itemUses: 0,
     });
+    setSelectedSequelName("");
     setModal("stage");
     setPaused(true);
     announce("企划通过，请选择负责人");
@@ -1046,10 +1115,56 @@ export default function Home() {
 
   const buyCareerManual = () => {
     if (year < 2) return announce("旅行商人会在第 2 年带来转职手册");
+    const boughtThisYear = merchantYear === year ? merchantPurchases : 0;
+    if (boughtThisYear >= 3) return announce("商人今年的 3 件商品已经售罄");
     if (cash < 1400) return announce("购买手册需要 ¥1,400千");
     setCash((value) => value - 1400);
     setCareerManuals((value) => value + 1);
+    setMerchantYear(year);
+    setMerchantPurchases(boughtThisYear + 1);
     announce("购入 1 本转职手册");
+  };
+
+  const buyShopItem = (item: (typeof SHOP_ITEMS)[number]) => {
+    if (year < 2) return announce("旅行商人会在第 2 年到访");
+    const boughtThisYear = merchantYear === year ? merchantPurchases : 0;
+    if (boughtThisYear >= 3) return announce("商人今年的 3 件商品已经售罄");
+    if (cash < item.cost) return announce("资金不足");
+    setCash((value) => value - item.cost);
+    setInventory((items) => ({ ...items, [item.key]: items[item.key] + 1 }));
+    setMerchantYear(year);
+    setMerchantPurchases(boughtThisYear + 1);
+    announce(`购入“${item.name}”`);
+  };
+
+  const useItem = (key: keyof Inventory) => {
+    if (inventory[key] < 1) return announce("库存不足");
+    if (key === "energyDrink") {
+      setInventory((items) => ({ ...items, [key]: items[key] - 1 }));
+      setStaff((members) => members.map((member) => ({ ...member, energy: clamp(member.energy + 42, 0, 100) })));
+      announce("全员恢复体力！");
+      return;
+    }
+    if (!project || project.kind !== "game") return announce("开发游戏时才能使用这个道具");
+    const researchCost = 4 + (project.itemUses ?? 0) * 2;
+    if (research < researchCost) return announce(`使用需要 ${researchCost} 点研究`);
+    const multiplier = 1 / (1 + (project.itemUses ?? 0) * .7);
+    setResearch((value) => value - researchCost);
+    setInventory((items) => ({ ...items, [key]: items[key] - 1 }));
+    setProject((current) => {
+      if (!current || current.kind !== "game") return current;
+      const amount = Math.max(3, Math.round(10 * multiplier));
+      return {
+        ...current,
+        fun: current.fun + (key === "funBoost" ? amount : 0),
+        creativity: current.creativity + (key === "creativityBoost" ? amount : 0),
+        graphics: current.graphics + (key === "graphicsBoost" ? amount : 0),
+        sound: current.sound + (key === "soundBoost" ? amount : 0),
+        bugs: key === "bugSpray" ? Math.max(0, current.bugs - Math.max(6, amount)) : current.bugs,
+        itemUses: (current.itemUses ?? 0) + 1,
+      };
+    });
+    announce((project.itemUses ?? 0) > 0 ? "道具生效，但连续使用效果有所降低" : "道具效果显著！");
   };
 
   const getCareerOptions = (member: Staff) => {
@@ -1087,18 +1202,35 @@ export default function Home() {
     announce(`${member.name} 转职为 ${role}！`);
   };
 
-  const hire = () => {
-    const cost = 1300 + staff.length * 250;
+  const hireWithMethod = (method: (typeof HIRING_METHODS)[number]) => {
     if (companyLevel === 1 && staff.length >= 6) return announce("当前办公室最多容纳 6 人");
-    if (cash < cost) return announce("资金不足");
+    if (staff.length >= 8) return announce("办公室已经满员");
+    if (cash < method.cost) return announce("资金不足");
     const id = Math.max(0, ...staff.map((member) => member.id)) + 1;
     const candidates = [
-      { name: "岚子", role: "程序员", code: 24, scenario: 9, art: 8, sound: 5, color: "#9b5de5" },
-      { name: "大熊", role: "制作人", code: 14, scenario: 19, art: 16, sound: 13, color: "#00b4d8" },
+      { name: "岚子", role: "程序员", code: 19, scenario: 9, art: 8, sound: 5, color: "#9b5de5" },
+      { name: "大熊", role: "制作人", code: 13, scenario: 18, art: 15, sound: 12, color: "#00b4d8" },
+      { name: "绘里", role: "美术", code: 7, scenario: 13, art: 22, sound: 8, color: "#e76f8a" },
+      { name: "电波君", role: "音效师", code: 10, scenario: 9, art: 11, sound: 23, color: "#6d9eeb" },
+      { name: "天才丸", role: "总监", code: 19, scenario: 22, art: 18, sound: 15, color: "#f4a261" },
     ];
-    const candidate = candidates[staff.length % candidates.length];
-    setCash((value) => value - cost);
-    setStaff((members) => [...members, { id, ...candidate, level: 1, energy: 100 }]);
+    const candidatePoolSize = Math.min(candidates.length, 2 + method.quality);
+    const candidate = candidates[(staff.length + year) % candidatePoolSize];
+    const bonus = method.quality * 3 + Math.floor(Math.random() * (method.quality + 2));
+    setCash((value) => value - method.cost);
+    setStaff((members) => [...members, {
+      id,
+      ...candidate,
+      code: candidate.code + bonus,
+      scenario: candidate.scenario + bonus,
+      art: candidate.art + bonus,
+      sound: candidate.sound + bonus,
+      level: 1,
+      energy: 100,
+      training: {},
+      masteredRoles: [],
+    }]);
+    setModal("staff");
     announce(`${candidate.name} 加入了工作室`);
   };
 
@@ -1269,6 +1401,24 @@ export default function Home() {
                   </span>
                   {!ownConsole && <button onClick={() => setModal("console")} disabled={companyLevel < 2 || releases.length < 2 || !hasHardwareEngineer}>配置</button>}
                 </div>
+                {companyLevel >= 2 && sequelCandidates.length > 0 && (
+                  <label className="sequel-picker">
+                    <span><b>名人堂续作</b><small>继承前作四项品质；续作跌出名人堂会终止系列</small></span>
+                    <select value={selectedSequelName} onChange={(event) => {
+                      const name = event.target.value;
+                      const sequel = sequelCandidates.find((item) => item.name === name);
+                      setSelectedSequelName(name);
+                      if (sequel) {
+                        setGameName(`${sequel.name} 2`);
+                        setSelectedGenre(sequel.genre ?? selectedGenre);
+                        setSelectedTheme(sequel.theme ?? selectedTheme);
+                      }
+                    }}>
+                      <option value="">制作全新作品</option>
+                      {sequelCandidates.map((item) => <option key={item.name} value={item.name}>{item.name} · {item.score}/40</option>)}
+                    </select>
+                  </label>
+                )}
                 <label className="field-label">游戏名称<input value={gameName} maxLength={12} onChange={(e) => setGameName(e.target.value)} /></label>
                 <div className="field-label">选择平台</div>
                 <div className="platform-grid">
@@ -1280,8 +1430,8 @@ export default function Home() {
                   ))}
                 </div>
                 <div className="two-columns">
-                  <label className="field-label">游戏类型<select value={selectedGenre} onChange={(e) => setSelectedGenre(e.target.value)}>{unlockedGenres.map((item) => <option key={item} value={item}>{item} Lv.{getKnowledgeLevel(genreExperience[item] ?? 0)}</option>)}</select></label>
-                  <label className="field-label">游戏题材<select value={selectedTheme} onChange={(e) => setSelectedTheme(e.target.value)}>{unlockedThemes.map((item) => <option key={item} value={item}>{item} Lv.{getKnowledgeLevel(themeExperience[item] ?? 0)}</option>)}</select></label>
+                  <label className="field-label">游戏类型<select value={selectedGenre} disabled={Boolean(selectedSequelName)} onChange={(e) => setSelectedGenre(e.target.value)}>{unlockedGenres.map((item) => <option key={item} value={item}>{item} Lv.{getKnowledgeLevel(genreExperience[item] ?? 0)}</option>)}</select></label>
+                  <label className="field-label">游戏题材<select value={selectedTheme} disabled={Boolean(selectedSequelName)} onChange={(e) => setSelectedTheme(e.target.value)}>{unlockedThemes.map((item) => <option key={item} value={item}>{item} Lv.{getKnowledgeLevel(themeExperience[item] ?? 0)}</option>)}</select></label>
                 </div>
                 <div className={`combo-note ${GREAT_COMBOS.has(`${selectedGenre}|${selectedTheme}`) ? "great" : ""}`}>
                   组合评价：{GREAT_COMBOS.has(`${selectedGenre}|${selectedTheme}`) ? "杰作预感！" : "普通"}
@@ -1364,7 +1514,7 @@ export default function Home() {
           <ModalShell title="员工管理" onClose={closeModal}>
             <div className="staff-summary">
               <span>员工 {staff.length}/{companyLevel === 1 ? 6 : 8} 人 · 转职手册 {careerManuals}</span>
-              <div><button onClick={buyCareerManual}>旅行商人</button><button onClick={hire}>招聘人才</button></div>
+              <div><button onClick={() => setModal("shop")}>旅行商人</button><button onClick={() => setModal("hire")}>招聘人才</button></div>
             </div>
             <div className="staff-list">
               {staff.map((member) => (
@@ -1420,9 +1570,59 @@ export default function Home() {
           </ModalShell>
         )}
 
+        {modal === "shop" && (
+          <ModalShell title="旅行商人 · 南瓜商会" onClose={() => setModal("staff")}>
+            <div className="merchant-banner">
+              <span className="merchant-face">P</span>
+              <span><b>{year < 2 ? "第 2 年再来吧！" : "每年限购 3 件商品"}</b><small>本年已购 {merchantYear === year ? merchantPurchases : 0}/3 · 道具可在宣传菜单的道具箱使用</small></span>
+            </div>
+            <div className="shop-grid">
+              <button onClick={buyCareerManual} disabled={year < 2 || (merchantYear === year && merchantPurchases >= 3)}>
+                <span className="shop-icon manual">C</span><span><b>转职手册</b><small>让 Lv.5 员工转换职业</small></span><strong>{formatCash(1400)}</strong>
+              </button>
+              {SHOP_ITEMS.map((item) => (
+                <button key={item.key} onClick={() => buyShopItem(item)} disabled={year < 2 || (merchantYear === year && merchantPurchases >= 3)}>
+                  <span className="shop-icon">{item.icon}</span><span><b>{item.name}</b><small>{item.note}</small></span><strong>{formatCash(item.cost)}</strong>
+                </button>
+              ))}
+            </div>
+          </ModalShell>
+        )}
+
+        {modal === "items" && (
+          <ModalShell title="道具箱" onClose={() => setModal("marketing")}>
+            <p className="modal-intro">开发增益连续使用会衰减并消耗研究点；活力汽水可随时使用。</p>
+            <div className="shop-grid inventory-grid">
+              {SHOP_ITEMS.map((item) => (
+                <button key={item.key} onClick={() => useItem(item.key)} disabled={inventory[item.key] < 1}>
+                  <span className="shop-icon">{item.icon}</span><span><b>{item.name}</b><small>{item.note}</small></span><strong>持有 {inventory[item.key]}</strong>
+                </button>
+              ))}
+            </div>
+          </ModalShell>
+        )}
+
+        {modal === "hire" && (
+          <ModalShell title="招聘人才" onClose={() => setModal("staff")}>
+            <p className="modal-intro">投入更高预算会提高候选人的基础能力；签约后立即加入工作室。</p>
+            <div className="hiring-list">
+              {HIRING_METHODS.filter((method) => !method.level || companyLevel >= method.level).map((method) => (
+                <button key={method.name} onClick={() => hireWithMethod(method)}>
+                  <span className="hire-rank">{"★".repeat(Math.max(1, method.quality + 1))}</span>
+                  <span><b>{method.name}</b><small>{method.note}</small></span>
+                  <strong>{formatCash(method.cost)}</strong>
+                </button>
+              ))}
+            </div>
+          </ModalShell>
+        )}
+
         {modal === "marketing" && (
           <ModalShell title="宣传推广" onClose={closeModal}>
-            <p className="modal-intro">{project?.kind === "game" ? `正在为《${project.name}》造势 · 热度 ${project.hype}` : "开发新作时可进行宣传。"}</p>
+            <div className="marketing-head">
+              <p className="modal-intro">{project?.kind === "game" ? `正在为《${project.name}》造势 · 热度 ${project.hype}` : "开发新作时可进行宣传。"}</p>
+              <button onClick={() => setModal("items")}>道具箱 · {Object.values(inventory).reduce((sum, value) => sum + value, 0)}</button>
+            </div>
             <div className="list-cards marketing-list">
               {[
                 { name: "街头传单", note: "吸引年轻玩家", cost: 220, hype: 4, icon: "P", segment: "teens" as const },
@@ -1478,7 +1678,7 @@ export default function Home() {
             <div className="release-table">
               {releases.length ? releases.map((item, index) => (
                 <div key={`${item.name}-${index}`}>
-                  <span><b>{item.name}</b><small>{item.audience ?? "全年龄"} · 发售 {item.weeks} 周</small></span>
+                  <span><b>{item.name}{item.sequelEligible ? " · 名人堂" : ""}</b><small>{item.audience ?? "全年龄"} · 发售 {item.weeks} 周</small></span>
                   <em>{item.score}/40</em>
                   <strong>{item.sales.toLocaleString()} 套<small>本周 {(item.weeklySales ?? 0).toLocaleString()}</small></strong>
                 </div>
