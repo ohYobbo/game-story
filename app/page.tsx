@@ -14,6 +14,17 @@ type Staff = {
   color: string;
 };
 
+type ProductionStage = "planning" | "coding" | "graphics" | "sound" | "debug";
+
+type FanSegments = {
+  kids: number;
+  teens: number;
+  adults: number;
+  seniors: number;
+  male: number;
+  female: number;
+};
+
 type Project = {
   kind: "game" | "contract" | "console";
   name: string;
@@ -31,6 +42,14 @@ type Project = {
   hype: number;
   reward?: number;
   marketUsers?: number;
+  stage?: ProductionStage;
+  stageProgress?: number;
+  stageTarget?: number;
+  leadStaffId?: number;
+  leadName?: string;
+  leadSkill?: number;
+  debugTarget?: number;
+  elapsedWeeks?: number;
 };
 
 type Release = {
@@ -40,6 +59,11 @@ type Release = {
   income: number;
   weeks: number;
   releasedYear?: number;
+  platform?: string;
+  weeklySales?: number;
+  remainingDemand?: number;
+  trend?: number;
+  audience?: string;
 };
 
 type SaveState = {
@@ -57,6 +81,8 @@ type SaveState = {
   ownConsole?: boolean;
   consoleUsers?: number;
   lastEventKey?: string;
+  fanSegments?: FanSegments;
+  reputation?: number;
 };
 
 type EventData = {
@@ -67,7 +93,7 @@ type EventData = {
   reward?: string;
 };
 
-type Modal = "develop" | "contracts" | "staff" | "marketing" | "records" | "review" | "event" | null;
+type Modal = "develop" | "contracts" | "staff" | "marketing" | "records" | "review" | "event" | "stage" | null;
 
 const INITIAL_STAFF: Staff[] = [
   { id: 1, name: "林小码", role: "程序员", level: 1, code: 18, art: 7, sound: 4, energy: 100, color: "#ef6351" },
@@ -92,6 +118,24 @@ const DIRECTIONS = [
 ];
 const GREAT_COMBOS = new Set(["角色扮演|幻想", "动作|忍者", "冒险|侦探", "模拟|小镇", "动作|机器人"]);
 
+const STAGE_ORDER: ProductionStage[] = ["planning", "coding", "graphics", "sound", "debug"];
+const STAGE_INFO: Record<ProductionStage, { label: string; short: string; skill: keyof Pick<Staff, "code" | "art" | "sound">; note: string }> = {
+  planning: { label: "企划构思", short: "企划", skill: "art", note: "决定作品的趣味与创意" },
+  coding: { label: "程序开发", short: "程序", skill: "code", note: "搭建核心玩法并实现系统" },
+  graphics: { label: "美术制作", short: "画面", skill: "art", note: "绘制角色、场景与特效" },
+  sound: { label: "音乐制作", short: "音乐", skill: "sound", note: "创作配乐与音效" },
+  debug: { label: "最终除错", short: "除错", skill: "code", note: "全员找出漏洞，准备发售" },
+};
+
+const INITIAL_FAN_SEGMENTS: FanSegments = {
+  kids: 18,
+  teens: 34,
+  adults: 42,
+  seniors: 8,
+  male: 58,
+  female: 44,
+};
+
 const contracts = [
   { name: "商店网页小游戏", target: 115, reward: 850, note: "限期 9 周" },
   { name: "动画片特效", target: 185, reward: 1450, note: "限期 12 周" },
@@ -101,6 +145,34 @@ const contracts = [
 const formatCash = (value: number) => `¥${Math.max(0, Math.round(value)).toLocaleString()}千`;
 const formatUsers = (value: number) => value >= 10_000 ? `${Math.round(value / 10_000)}万` : value.toLocaleString();
 const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
+
+function getAudience(genre: string, theme: string): { label: string; gains: Partial<FanSegments> } {
+  if (genre === "动作" || theme === "忍者" || theme === "机器人") {
+    return { label: "青少年・男性", gains: { teens: 10, male: 9, kids: 3 } };
+  }
+  if (genre === "角色扮演" || theme === "幻想") {
+    return { label: "青少年・全年龄", gains: { teens: 8, adults: 6, male: 5, female: 5 } };
+  }
+  if (genre === "模拟" || theme === "小镇") {
+    return { label: "成人・女性", gains: { adults: 10, female: 9, seniors: 3 } };
+  }
+  if (genre === "冒险" || theme === "侦探") {
+    return { label: "成人・女性", gains: { adults: 9, female: 7, teens: 4 } };
+  }
+  return { label: "家庭・全年龄", gains: { kids: 6, seniors: 7, female: 5, male: 3 } };
+}
+
+function getStageTarget(stage: ProductionStage, direction: string): number {
+  const targets: Record<ProductionStage, number> = {
+    planning: 58,
+    coding: 108,
+    graphics: 82,
+    sound: 68,
+    debug: 1,
+  };
+  const modifier = direction === "重视品质" ? 1.2 : direction === "赶工" ? .82 : 1;
+  return Math.round(targets[stage] * modifier);
+}
 
 function loadSave(): SaveState | null {
   if (typeof window === "undefined") return null;
@@ -178,6 +250,8 @@ export default function Home() {
   const [ownConsole, setOwnConsole] = useState(false);
   const [consoleUsers, setConsoleUsers] = useState(0);
   const [lastEventKey, setLastEventKey] = useState("");
+  const [fanSegments, setFanSegments] = useState<FanSegments>(INITIAL_FAN_SEGMENTS);
+  const [reputation, setReputation] = useState(10);
   const [speed, setSpeed] = useState(1);
   const [paused, setPaused] = useState(false);
   const [modal, setModal] = useState<Modal>(null);
@@ -187,7 +261,14 @@ export default function Home() {
   const [selectedTheme, setSelectedTheme] = useState(THEMES[0]);
   const [selectedDirection, setSelectedDirection] = useState(DIRECTIONS[0].name);
   const [gameName, setGameName] = useState("像素勇者");
-  const [review, setReview] = useState<{ name: string; scores: number[]; sales: number; income: number } | null>(null);
+  const [review, setReview] = useState<{
+    name: string;
+    scores: number[];
+    sales: number;
+    income: number;
+    audience: string;
+    reputationChange: number;
+  } | null>(null);
   const [eventData, setEventData] = useState<EventData | null>(null);
   const tickRef = useRef(0);
 
@@ -201,13 +282,27 @@ export default function Home() {
     setMonth(saved.month);
     setWeek(saved.week);
     setStaff(saved.staff);
-    setProject(saved.project);
-    setReleases(saved.releases);
+    const migratedProject = saved.project?.kind === "game" && !saved.project.stage
+      ? {
+          ...saved.project,
+          stage: "coding" as ProductionStage,
+          stageProgress: saved.project.progress,
+          stageTarget: saved.project.target,
+          leadStaffId: saved.staff[0]?.id,
+          leadName: saved.staff[0]?.name,
+          leadSkill: saved.staff[0]?.code ?? 10,
+          elapsedWeeks: 0,
+        }
+      : saved.project;
+    setProject(migratedProject);
+    setReleases(saved.releases ?? []);
     setCompanyLevel(saved.companyLevel);
     setAwards(saved.awards ?? 0);
     setOwnConsole(saved.ownConsole ?? false);
     setConsoleUsers(saved.consoleUsers ?? 0);
     setLastEventKey(saved.lastEventKey ?? "");
+    setFanSegments(saved.fanSegments ?? INITIAL_FAN_SEGMENTS);
+    setReputation(saved.reputation ?? 10);
   }, []);
 
   const availablePlatforms = useMemo(() => {
@@ -229,13 +324,28 @@ export default function Home() {
     () => staff.reduce((sum, member) => sum + member.code + member.art + member.sound, 0),
     [staff],
   );
-  const projectPercent = project ? Math.min(100, Math.round((project.progress / project.target) * 100)) : 0;
+  const activeStage = project?.kind === "game" ? (project.stage ?? "coding") : null;
+  const projectPercent = project
+    ? project.kind === "game"
+      ? Math.min(100, Math.round((
+          STAGE_ORDER.indexOf(activeStage ?? "coding") +
+          clamp((project.stageProgress ?? 0) / Math.max(1, project.stageTarget ?? 1), 0, 1)
+        ) / STAGE_ORDER.length * 100))
+      : Math.min(100, Math.round((project.progress / project.target) * 100))
+    : 0;
 
   useEffect(() => {
     if (!availablePlatforms.some((item) => item.name === selectedPlatform)) {
       setSelectedPlatform(availablePlatforms[0]?.name ?? "个人电脑");
     }
   }, [availablePlatforms, selectedPlatform]);
+
+  useEffect(() => {
+    if (project?.kind === "game" && project.stage !== "debug" && !project.leadName && !modal) {
+      setPaused(true);
+      setModal("stage");
+    }
+  }, [project, modal]);
 
   const announce = (message: string) => {
     setToast(message);
@@ -245,7 +355,7 @@ export default function Home() {
   const saveGame = () => {
     const state: SaveState = {
       cash, fans, research, year, month, week, staff, project, releases, companyLevel,
-      awards, ownConsole, consoleUsers, lastEventKey,
+      awards, ownConsole, consoleUsers, lastEventKey, fanSegments, reputation,
     };
     window.localStorage.setItem("pixel-studio-save", JSON.stringify(state));
     announce("已保存到这台设备");
@@ -292,21 +402,48 @@ export default function Home() {
     }
 
     const combo = GREAT_COMBOS.has(`${finished.genre}|${finished.theme}`) ? 2 : 0;
+    const bugPenalty = Math.min(3.5, finished.bugs * .14);
     const base = (finished.fun + finished.creativity + finished.graphics + finished.sound) / 48;
-    const scores = [0.2, 0.7, 1.1, 1.6].map((bonus) => clamp(Math.round(base + combo + bonus + Math.random() * 1.4), 2, 10));
+    const scores = [0.2, 0.7, 1.1, 1.6].map((bonus) =>
+      clamp(Math.round(base + combo + bonus + reputation / 45 - bugPenalty + Math.random() * 1.4), 1, 10),
+    );
     const totalScore = scores.reduce((sum, score) => sum + score, 0);
     const marketMultiplier = clamp((finished.marketUsers ?? 280_000) / 520_000, 0.7, 3.4);
-    const sales = Math.round((totalScore ** 2 * 38 + finished.hype * 120 + fans * 4) * marketMultiplier * (0.85 + Math.random() * 0.3));
+    const sales = Math.round((totalScore ** 2 * 24 + finished.hype * 95 + fans * 2.4) * marketMultiplier * (0.85 + Math.random() * 0.3));
     const income = Math.round(sales * 0.018);
+    const audience = getAudience(finished.genre, finished.theme);
+    const reputationChange = totalScore >= 34 ? 8 : totalScore >= 28 ? 4 : totalScore >= 22 ? 1 : -4;
+    const fanGrowth = Math.max(4, Math.round(sales / 220));
+    const audienceScale = clamp(totalScore / 28, .6, 1.6);
     setCash((value) => value + income);
-    setFans((value) => value + Math.round(sales / 160));
+    setFans((value) => value + fanGrowth);
+    setFanSegments((segments) => {
+      const next = { ...segments };
+      for (const [key, value] of Object.entries(audience.gains) as [keyof FanSegments, number][]) {
+        next[key] += Math.max(1, Math.round(value * audienceScale));
+      }
+      return next;
+    });
+    setReputation((value) => clamp(value + reputationChange, 0, 100));
     setResearch((value) => value + 7 + Math.round(totalScore / 8));
-    setReleases((items) => [{ name: finished.name, score: totalScore, sales, income, weeks: 0, releasedYear: year }, ...items].slice(0, 12));
+    setReleases((items) => [{
+      name: finished.name,
+      score: totalScore,
+      sales,
+      income,
+      weeks: 0,
+      releasedYear: year,
+      platform: finished.platform,
+      weeklySales: sales,
+      remainingDemand: Math.round(sales * (1.8 + totalScore / 13)),
+      trend: clamp(.68 + totalScore / 100 + finished.hype / 180, .72, 1.12),
+      audience: audience.label,
+    }, ...items].slice(0, 12));
     if (finished.platform === "像素盒子") {
       setConsoleUsers((value) => value + Math.round(sales * 0.18));
     }
     setProject(null);
-    setReview({ name: finished.name, scores, sales, income });
+    setReview({ name: finished.name, scores, sales, income, audience: audience.label, reputationChange });
     setModal("review");
   };
 
@@ -401,24 +538,121 @@ export default function Home() {
     if (paused || modal) return;
     const interval = window.setInterval(() => {
       tickRef.current += 1;
-      if (tickRef.current % 4 === 0) advanceCalendar();
+      const isNewWeek = tickRef.current % 4 === 0;
+      if (isNewWeek) {
+        advanceCalendar();
+        let weeklyIncome = 0;
+        let weeklyFans = 0;
+        let ownPlatformSales = 0;
+        const nextReleases = releases.map((item) => {
+          const currentWeekly = item.weeklySales ?? 0;
+          const remaining = item.remainingDemand ?? 0;
+          const nextWeekly = Math.min(
+            remaining,
+            Math.max(0, Math.round(currentWeekly * (item.trend ?? .78) * .82)),
+          );
+          const income = Math.round(nextWeekly * .018);
+          weeklyIncome += income;
+          weeklyFans += Math.round(nextWeekly / 6500);
+          if (item.platform === "像素盒子") ownPlatformSales += nextWeekly;
+          return {
+            ...item,
+            sales: item.sales + nextWeekly,
+            income: item.income + income,
+            weeks: item.weeks + 1,
+            weeklySales: nextWeekly,
+            remainingDemand: Math.max(0, remaining - nextWeekly),
+          };
+        });
+        setReleases(nextReleases);
+        if (weeklyIncome) setCash((value) => value + weeklyIncome);
+        if (weeklyFans) setFans((value) => value + weeklyFans);
+        if (ownPlatformSales) setConsoleUsers((value) => value + Math.round(ownPlatformSales * .025));
+      }
       setStaff((members) =>
         members.map((member) => ({
           ...member,
           energy: clamp(member.energy + (project ? -1.6 : 4), 25, 100),
         })),
       );
-      setReleases((items) =>
-        items.map((item) => ({ ...item, weeks: item.weeks + 1 })),
-      );
 
       if (project) {
         const directionModifier = project.direction === "赶工" ? 1.35 : project.direction === "重视品质" ? 0.82 : 1;
         const energyModifier = staff.reduce((sum, member) => sum + member.energy, 0) / (staff.length * 100);
-        const gain = (totalPower / 22) * directionModifier * energyModifier * (0.85 + Math.random() * 0.3);
-        const qualityGain = (totalPower / 105) * (project.direction === "重视品质" ? 1.35 : 1);
         setProject((current) => {
           if (!current) return null;
+          if (current.kind === "game") {
+            const stage = current.stage ?? "coding";
+            if (stage === "debug") {
+              const debugGain = (totalPower / 90) * energyModifier * (0.8 + Math.random() * .35);
+              const bugs = Math.max(0, current.bugs - debugGain);
+              const next = {
+                ...current,
+                bugs,
+                stageProgress: Math.min(current.stageTarget ?? 1, (current.stageProgress ?? 0) + debugGain),
+                elapsedWeeks: (current.elapsedWeeks ?? 0) + (isNewWeek ? 1 : 0),
+              };
+              if (bugs <= 0.05) {
+                window.setTimeout(() => finishProject({ ...next, bugs: 0 }), 80);
+                return { ...next, bugs: 0 };
+              }
+              return next;
+            }
+
+            if (!current.leadName || !current.leadSkill) return current;
+            const leadSkill = current.leadSkill;
+            const gain = (totalPower / 42 + leadSkill / 6) * directionModifier * energyModifier * (0.82 + Math.random() * .36);
+            const qualityModifier = current.direction === "重视品质" ? 1.28 : current.direction === "赶工" ? .78 : 1;
+            const qualityGain = (leadSkill / 24 + totalPower / 360) * qualityModifier * (0.8 + Math.random() * .35);
+            const next = {
+              ...current,
+              progress: current.progress + gain,
+              stageProgress: (current.stageProgress ?? 0) + gain,
+              elapsedWeeks: (current.elapsedWeeks ?? 0) + (isNewWeek ? 1 : 0),
+              fun: current.fun + (stage === "planning" ? qualityGain * .75 : stage === "coding" ? qualityGain * .45 : 0),
+              creativity: current.creativity + (stage === "planning" ? qualityGain : stage === "graphics" ? qualityGain * .22 : 0),
+              graphics: current.graphics + (stage === "graphics" ? qualityGain * 1.15 : 0),
+              sound: current.sound + (stage === "sound" ? qualityGain * 1.2 : 0),
+              bugs: current.bugs + (stage === "coding"
+                ? (current.direction === "赶工" ? Math.random() * 1.8 : Math.random() * 1.25)
+                : Math.random() * .18),
+            };
+            if ((next.stageProgress ?? 0) >= (next.stageTarget ?? 1)) {
+              const stageIndex = STAGE_ORDER.indexOf(stage);
+              const nextStage = STAGE_ORDER[stageIndex + 1] ?? "debug";
+              if (nextStage === "debug") {
+                const debugTarget = Math.max(1, next.bugs);
+                window.setTimeout(() => announce("制作完成，进入最终除错！"), 0);
+                return {
+                  ...next,
+                  stage: "debug",
+                  stageProgress: 0,
+                  stageTarget: debugTarget,
+                  debugTarget,
+                  leadStaffId: undefined,
+                  leadName: "全体员工",
+                  leadSkill: totalPower,
+                };
+              }
+              window.setTimeout(() => {
+                setPaused(true);
+                setModal("stage");
+              }, 80);
+              return {
+                ...next,
+                stage: nextStage,
+                stageProgress: 0,
+                stageTarget: getStageTarget(nextStage, next.direction),
+                leadStaffId: undefined,
+                leadName: undefined,
+                leadSkill: undefined,
+              };
+            }
+            return next;
+          }
+
+          const gain = (totalPower / 22) * directionModifier * energyModifier * (0.85 + Math.random() * 0.3);
+          const qualityGain = (totalPower / 105) * (current.direction === "重视品质" ? 1.35 : 1);
           const next = {
             ...current,
             progress: current.progress + gain,
@@ -435,23 +669,23 @@ export default function Home() {
           return next;
         });
         if (tickRef.current % 3 === 0) setResearch((value) => value + 1);
-      } else if (tickRef.current % 4 === 0) {
+      } else if (isNewWeek) {
         setStaff((members) => members.map((member) => ({ ...member, energy: clamp(member.energy + 10, 0, 100) })));
       }
     }, 1200 / speed);
     return () => window.clearInterval(interval);
-  }, [paused, modal, speed, project, staff, totalPower, fans]);
+  }, [paused, modal, speed, project, staff, totalPower, fans, releases]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
       const state: SaveState = {
         cash, fans, research, year, month, week, staff, project, releases, companyLevel,
-        awards, ownConsole, consoleUsers, lastEventKey,
+        awards, ownConsole, consoleUsers, lastEventKey, fanSegments, reputation,
       };
       window.localStorage.setItem("pixel-studio-save", JSON.stringify(state));
     }, 8000);
     return () => window.clearInterval(timer);
-  }, [cash, fans, research, year, month, week, staff, project, releases, companyLevel, awards, ownConsole, consoleUsers, lastEventKey]);
+  }, [cash, fans, research, year, month, week, staff, project, releases, companyLevel, awards, ownConsole, consoleUsers, lastEventKey, fanSegments, reputation]);
 
   const openMenu = (nextModal: Modal) => {
     setModal(nextModal);
@@ -486,9 +720,51 @@ export default function Home() {
       bugs: 0,
       hype: 2,
       marketUsers: platform.users,
+      stage: "planning",
+      stageProgress: 0,
+      stageTarget: getStageTarget("planning", selectedDirection),
+      elapsedWeeks: 0,
     });
+    setModal("stage");
+    setPaused(true);
+    announce("企划通过，请选择负责人");
+  };
+
+  const assignStageLead = (member: Staff) => {
+    if (!project || project.kind !== "game" || project.stage === "debug") return;
+    const stageInfo = STAGE_INFO[project.stage ?? "planning"];
+    const skill = member[stageInfo.skill];
+    setProject((current) => current ? {
+      ...current,
+      leadStaffId: member.id,
+      leadName: member.name,
+      leadSkill: skill,
+    } : current);
     closeModal();
-    announce("企划通过！全员开始制作");
+    announce(`${member.name} 负责${stageInfo.label}`);
+  };
+
+  const hireExternalLead = () => {
+    if (!project || project.kind !== "game" || project.stage === "debug") return;
+    const stage = project.stage ?? "planning";
+    const stageInfo = STAGE_INFO[stage];
+    const bestInternal = Math.max(...staff.map((member) => member[stageInfo.skill]));
+    const cost = 900 + STAGE_ORDER.indexOf(stage) * 350;
+    if (cash < cost) return announce("资金不足，无法邀请外部专家");
+    setCash((value) => value - cost);
+    setProject((current) => current ? {
+      ...current,
+      leadStaffId: undefined,
+      leadName: "外聘名人",
+      leadSkill: bestInternal + 14,
+    } : current);
+    closeModal();
+    announce(`外部专家加入${stageInfo.label}`);
+  };
+
+  const forceRelease = () => {
+    if (!project || project.kind !== "game" || project.stage !== "debug") return;
+    finishProject(project);
   };
 
   const startConsoleProject = () => {
@@ -597,12 +873,13 @@ export default function Home() {
     announce(`${candidate.name} 加入了工作室`);
   };
 
-  const advertise = (cost: number, hype: number, name: string) => {
+  const advertise = (cost: number, hype: number, name: string, segment: keyof FanSegments) => {
     if (!project || project.kind !== "game") return announce("正在开发游戏时才能宣传");
     if (cash < cost) return announce("资金不足");
     setCash((value) => value - cost);
     setProject((current) => current ? { ...current, hype: current.hype + hype } : current);
     setFans((value) => value + Math.round(hype * 2.5));
+    setFanSegments((segments) => ({ ...segments, [segment]: segments[segment] + Math.max(1, Math.round(hype / 2)) }));
     announce(`${name} 引发了话题！`);
   };
 
@@ -674,7 +951,7 @@ export default function Home() {
                 <div>
                   <small>
                     {project.kind === "game"
-                      ? `${project.platform} / ${project.genre} × ${project.theme}`
+                      ? `${STAGE_INFO[project.stage ?? "coding"].label} · ${project.leadName ?? "等待负责人"}`
                       : project.kind === "console" ? "秘密硬件研发计划" : "承接外包项目"}
                   </small>
                   <strong>{project.name}</strong>
@@ -683,13 +960,27 @@ export default function Home() {
               </div>
               <div className="progress-track"><i style={{ width: `${projectPercent}%` }} /></div>
               {project.kind === "game" ? (
-                <div className="quality-grid">
-                  <span><i className="q-fun">F</i>趣味 <b>{Math.round(project.fun)}</b></span>
-                  <span><i className="q-idea">I</i>创意 <b>{Math.round(project.creativity)}</b></span>
-                  <span><i className="q-art">G</i>画面 <b>{Math.round(project.graphics)}</b></span>
-                  <span><i className="q-snd">S</i>音乐 <b>{Math.round(project.sound)}</b></span>
-                  <span><i className="q-bug">!</i>漏洞 <b>{Math.round(project.bugs)}</b></span>
-                </div>
+                <>
+                  <div className="stage-ribbon">
+                    {STAGE_ORDER.map((stage, index) => {
+                      const currentIndex = STAGE_ORDER.indexOf(project.stage ?? "coding");
+                      return <span key={stage} className={index < currentIndex ? "done" : index === currentIndex ? "active" : ""}>{STAGE_INFO[stage].short}</span>;
+                    })}
+                  </div>
+                  <div className="quality-grid">
+                    <span><i className="q-fun">F</i>趣味 <b>{Math.round(project.fun)}</b></span>
+                    <span><i className="q-idea">I</i>创意 <b>{Math.round(project.creativity)}</b></span>
+                    <span><i className="q-art">G</i>画面 <b>{Math.round(project.graphics)}</b></span>
+                    <span><i className="q-snd">S</i>音乐 <b>{Math.round(project.sound)}</b></span>
+                    <span><i className="q-bug">!</i>漏洞 <b>{Math.round(project.bugs)}</b></span>
+                  </div>
+                  {project.stage === "debug" && (
+                    <div className="debug-strip">
+                      <span>全员除错中 · 剩余 {Math.ceil(project.bugs)} 个漏洞</span>
+                      <button onClick={forceRelease}>带漏洞发售</button>
+                    </div>
+                  )}
+                </>
               ) : project.kind === "console" ? (
                 <div className="console-progress">
                   <span><b>CPU</b>{Math.round(projectPercent * .8)}</span>
@@ -774,6 +1065,39 @@ export default function Home() {
           </ModalShell>
         )}
 
+        {modal === "stage" && project?.kind === "game" && project.stage !== "debug" && (
+          <ModalShell
+            title={`${STAGE_INFO[project.stage ?? "planning"].label}负责人`}
+            onClose={() => announce("请先选择负责人才能继续制作")}
+          >
+            <div className="stage-brief">
+              <div className="stage-number">{STAGE_ORDER.indexOf(project.stage ?? "planning") + 1}</div>
+              <div>
+                <b>{STAGE_INFO[project.stage ?? "planning"].label}</b>
+                <small>{STAGE_INFO[project.stage ?? "planning"].note}。负责人能力会直接影响最终品质。</small>
+              </div>
+            </div>
+            <div className="lead-grid">
+              {staff.map((member) => {
+                const skillKey = STAGE_INFO[project.stage ?? "planning"].skill;
+                const skill = member[skillKey];
+                return (
+                  <button key={member.id} onClick={() => assignStageLead(member)}>
+                    <span className="mini-avatar" style={{ "--shirt": member.color } as React.CSSProperties}><i /></span>
+                    <span><b>{member.name}</b><small>{member.role} · 体力 {Math.round(member.energy)}%</small></span>
+                    <strong>{skillKey === "code" ? "程序" : skillKey === "art" ? "创作" : "音乐"} {skill}</strong>
+                  </button>
+                );
+              })}
+              <button className="external-lead" onClick={hireExternalLead}>
+                <span className="external-star">★</span>
+                <span><b>邀请外聘名人</b><small>能力出众，不消耗员工体力</small></span>
+                <strong>{formatCash(900 + STAGE_ORDER.indexOf(project.stage ?? "planning") * 350)}</strong>
+              </button>
+            </div>
+          </ModalShell>
+        )}
+
         {modal === "contracts" && (
           <ModalShell title="承接外包" onClose={closeModal}>
             <p className="modal-intro">没有制作新作时，可以用外包赚取资金和研究点。</p>
@@ -813,11 +1137,11 @@ export default function Home() {
             <p className="modal-intro">{project?.kind === "game" ? `正在为《${project.name}》造势 · 热度 ${project.hype}` : "开发新作时可进行宣传。"}</p>
             <div className="list-cards marketing-list">
               {[
-                { name: "街头传单", note: "小幅增加热度", cost: 220, hype: 4, icon: "P" },
-                { name: "游戏杂志广告", note: "覆盖核心玩家", cost: 850, hype: 12, icon: "M" },
-                { name: "电视黄金广告", note: "引发全民讨论", cost: 2600, hype: 32, icon: "TV" },
+                { name: "街头传单", note: "吸引年轻玩家", cost: 220, hype: 4, icon: "P", segment: "teens" as const },
+                { name: "游戏杂志广告", note: "覆盖成人核心玩家", cost: 850, hype: 12, icon: "M", segment: "adults" as const },
+                { name: "电视黄金广告", note: "打入家庭与儿童市场", cost: 2600, hype: 32, icon: "TV", segment: "kids" as const },
               ].map((item) => (
-                <button key={item.name} onClick={() => advertise(item.cost, item.hype, item.name)}>
+                <button key={item.name} onClick={() => advertise(item.cost, item.hype, item.name, item.segment)}>
                   <span className="list-icon ad-icon">{item.icon}</span>
                   <span><b>{item.name}</b><small>{item.note} · 热度 +{item.hype}</small></span>
                   <strong>{formatCash(item.cost)}</strong>
@@ -835,14 +1159,36 @@ export default function Home() {
               <div><small>最高评分</small><b>{releases.length ? Math.max(...releases.map((item) => item.score)) : "—"}</b></div>
               <div><small>最高销量</small><b>{releases.length ? Math.max(...releases.map((item) => item.sales)).toLocaleString() : "—"}</b></div>
               <div><small>获奖次数</small><b>{awards}</b></div>
+              <div><small>业界口碑</small><b>{reputation}</b></div>
             </div>
             <div className="console-record">
               <span className={`console-dot ${ownConsole ? "online" : ""}`} />
               <span><b>{ownConsole ? "像素盒子" : "尚未推出自研主机"}</b><small>{ownConsole ? `平台用户 ${formatUsers(consoleUsers)}` : "扩建并积累作品后可启动硬件研发"}</small></span>
             </div>
+            <div className="fan-segments">
+              <div className="fan-title"><b>玩家人群</b><small>作品题材与宣传方式会改变各群体支持度</small></div>
+              {([
+                ["儿童", fanSegments.kids, "#ef9a4d"],
+                ["青少年", fanSegments.teens, "#e66b58"],
+                ["成人", fanSegments.adults, "#5b98c5"],
+                ["银发族", fanSegments.seniors, "#8b7fbd"],
+                ["男性", fanSegments.male, "#4aa7a0"],
+                ["女性", fanSegments.female, "#dc78a5"],
+              ] as [string, number, string][]).map(([label, value, color]) => (
+                <div className="fan-row" key={label}>
+                  <span>{label}</span>
+                  <i><b style={{ width: `${clamp(value, 4, 100)}%`, background: color }} /></i>
+                  <em>{value}</em>
+                </div>
+              ))}
+            </div>
             <div className="release-table">
               {releases.length ? releases.map((item, index) => (
-                <div key={`${item.name}-${index}`}><span><b>{item.name}</b><small>发售 {item.weeks} 周</small></span><em>{item.score}/40</em><strong>{item.sales.toLocaleString()} 套</strong></div>
+                <div key={`${item.name}-${index}`}>
+                  <span><b>{item.name}</b><small>{item.audience ?? "全年龄"} · 发售 {item.weeks} 周</small></span>
+                  <em>{item.score}/40</em>
+                  <strong>{item.sales.toLocaleString()} 套<small>本周 {(item.weeklySales ?? 0).toLocaleString()}</small></strong>
+                </div>
               )) : <p>还没有发售作品。第一部传奇正等着你！</p>}
             </div>
           </ModalShell>
@@ -882,7 +1228,12 @@ export default function Home() {
                 {review.scores.map((score, index) => <div key={index}><span>{["妙手", "铁面", "玩家", "主编"][index]}</span><b>{score}</b><small>/10</small></div>)}
               </div>
               <div className="review-total">总分 <b>{review.scores.reduce((sum, score) => sum + score, 0)}</b><span>/40</span></div>
-              <div className="sales-result"><span>首周销量 <b>{review.sales.toLocaleString()}</b> 套</span><span>销售收入 <b>{formatCash(review.income)}</b></span></div>
+              <div className="sales-result">
+                <span>首周销量 <b>{review.sales.toLocaleString()}</b> 套</span>
+                <span>销售收入 <b>{formatCash(review.income)}</b></span>
+                <span>核心受众 <b>{review.audience}</b></span>
+                <span>业界口碑 <b>{review.reputationChange >= 0 ? "+" : ""}{review.reputationChange}</b></span>
+              </div>
               <button className="primary-button" onClick={closeModal}>太棒了！</button>
             </div>
           </ModalShell>
