@@ -1133,6 +1133,51 @@ button {
   opacity: .55;
 }
 
+.console-builder {
+  display: grid;
+  gap: 9px;
+}
+
+.console-builder label {
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  align-items: center;
+  gap: 8px;
+  color: #5e5a4e;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.console-builder select {
+  height: 39px;
+  padding: 0 9px;
+  border: 3px solid #6f7d7c;
+  border-radius: 0;
+  background: #fffef4;
+  color: #3f4d4d;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.console-spec-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+}
+
+.console-spec-summary span {
+  padding: 9px;
+  border: 3px solid #876c43;
+  background: #f3df9a;
+  text-align: center;
+}
+
+.console-spec-summary small,
+.console-spec-summary b { display: block; }
+.console-spec-summary small { color: #736646; font-size: 8px; }
+.console-spec-summary b { margin-top: 3px; color: #b45733; font-size: 14px; }
+
 .hardware-icon {
   position: relative;
   width: 47px;
@@ -1501,6 +1546,11 @@ button {
   font-weight: 900;
 }
 
+.staff-summary > div {
+  display: flex;
+  gap: 6px;
+}
+
 .staff-summary button { padding: 6px 10px; font-size: 10px; }
 
 .staff-list {
@@ -1575,7 +1625,107 @@ button {
   box-shadow: inset 0 3px #8dcbd1, 0 3px #355864;
 }
 
+.staff-actions > button:nth-child(3) {
+  border-color: #66538e;
+  background: #8b73b3;
+  box-shadow: inset 0 3px #b9a0da, 0 3px #51416f;
+}
+
 .staff-actions > button small { display: block; margin-top: 2px; font-size: 8px; }
+
+.training-hero,
+.career-current {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding: 9px;
+  border: 3px solid #8b8069;
+  background: #f3e8c9;
+}
+
+.training-hero > span:nth-child(2),
+.career-current > span:nth-child(2) {
+  flex: 1;
+}
+
+.training-hero b,
+.training-hero small,
+.career-current b,
+.career-current small {
+  display: block;
+}
+
+.training-hero b,
+.career-current b { font-size: 12px; }
+.training-hero small,
+.career-current small { margin-top: 4px; color: #776f5d; font-size: 8px; }
+.career-current em { color: #8064a6; font-size: 10px; font-style: normal; font-weight: 900; }
+
+.training-list {
+  display: grid;
+  gap: 6px;
+}
+
+.training-list button {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 9px;
+  min-height: 61px;
+  padding: 7px 9px;
+  border: 3px solid #7e887e;
+  background: #fffef4;
+  text-align: left;
+}
+
+.training-list button > span:nth-child(2) b,
+.training-list button > span:nth-child(2) small {
+  display: block;
+}
+
+.training-list button > span:nth-child(2) b { font-size: 11px; }
+.training-list button > span:nth-child(2) small { margin-top: 4px; color: #7f7765; font-size: 8px; }
+.training-list button > strong { color: #b35c31; font-size: 10px; }
+
+.training-icon {
+  display: grid;
+  place-items: center;
+  width: 39px;
+  height: 39px;
+  border: 3px solid #5a6570;
+  background: #6da3bb;
+  box-shadow: inset 4px 0 #9bd1d8;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 1000;
+}
+
+.career-sheet > p {
+  margin: 0 0 9px;
+  color: #6f6858;
+  font-size: 9px;
+  line-height: 1.6;
+}
+
+.career-options {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 7px;
+}
+
+.career-options button {
+  min-height: 55px;
+  padding: 7px;
+  border: 3px solid #66538e;
+  background: #eee5f6;
+  color: #4f416c;
+}
+
+.career-options b,
+.career-options small { display: block; }
+.career-options b { font-size: 11px; }
+.career-options small { margin-top: 4px; color: #81718e; font-size: 8px; }
 
 .expand-button {
   width: 100%;
@@ -1653,6 +1803,21 @@ button {
   box-shadow: 0 0 0 3px rgba(92,185,85,.2);
 }
 
+.ending-record {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 2px 10px;
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  border: 3px solid #a47734;
+  background: #f5df87;
+}
+
+.ending-record b { font-size: 10px; }
+.ending-record strong { grid-row: 1 / 3; grid-column: 2; color: #b85d34; font-size: 17px; }
+.ending-record small { color: #756a50; font-size: 8px; }
+
 .fan-segments {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1708,6 +1873,42 @@ button {
   font-size: 8px;
   font-style: normal;
   text-align: right;
+}
+
+.knowledge-panel {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.knowledge-panel > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px;
+  border: 3px solid #7f8a82;
+  background: #fffef6;
+}
+
+.knowledge-panel > div > b {
+  flex-basis: 100%;
+  margin-bottom: 2px;
+  font-size: 9px;
+}
+
+.knowledge-panel span {
+  padding: 3px 5px;
+  background: #e6eadb;
+  color: #4f625f;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.knowledge-panel span em {
+  margin-left: 4px;
+  color: #cb653a;
+  font-style: normal;
 }
 
 .release-table {
@@ -1791,6 +1992,7 @@ button {
 }
 .sales-result span { padding: 8px; border: 2px solid #aca07f; background: #fffdf3; font-size: 9px; }
 .sales-result b { display: block; margin-top: 3px; color: #3f88ae; font-size: 13px; }
+.sales-result span:last-child { grid-column: 1 / -1; }
 
 .event-sheet {
   text-align: center;
@@ -1811,6 +2013,7 @@ button {
 .event-console .event-stage { background-color: #d36b43; }
 .event-payroll .event-stage { background-color: #5a9a71; }
 .event-market .event-stage { background-color: #5f77b8; }
+.event-ending .event-stage { background-color: #d29a39; }
 
 .event-burst {
   position: absolute;
@@ -2098,6 +2301,9 @@ button {
   .hardware-card > span:nth-child(2) b { font-size: 9px; }
   .hardware-card > span:nth-child(2) small { font-size: 7px; }
   .hardware-card button { padding: 6px 7px; border-width: 2px; font-size: 8px; }
+  .console-builder label { grid-template-columns: 72px 1fr; font-size: 8px; }
+  .console-builder select { height: 35px; border-width: 2px; font-size: 8px; }
+  .console-spec-summary span { padding: 7px; border-width: 2px; }
   .platform-grid { gap: 5px; }
   .platform-grid button { min-height: 91px; border-width: 2px; }
   .platform-grid i { transform: scale(.8); margin-bottom: 1px; }
@@ -2110,11 +2316,18 @@ button {
   .direction-row button { border-width: 2px; }
   .list-cards > button { min-height: 61px; border-width: 2px; }
   .list-icon { width: 38px; height: 38px; }
+  .staff-summary { align-items: flex-start; gap: 6px; }
+  .staff-summary > div { flex-direction: column; gap: 3px; }
+  .staff-summary button { padding: 4px 6px; font-size: 8px; }
   .staff-list article { min-height: 61px; border-width: 2px; }
-  .staff-actions > button { min-width: 49px; padding: 4px; border-width: 2px; font-size: 8px; }
+  .staff-actions > button { min-width: 45px; padding: 3px; border-width: 2px; font-size: 7px; }
+  .training-list button { min-height: 58px; border-width: 2px; }
+  .training-icon { width: 34px; height: 34px; border-width: 2px; }
+  .career-options button { border-width: 2px; }
   .record-stats { grid-template-columns: repeat(2, 1fr); }
   .fan-segments { grid-template-columns: 1fr; }
   .fan-title { grid-column: auto; }
+  .knowledge-panel { grid-template-columns: 1fr; }
   .event-stage { height: 105px; }
   .event-trophy { top: 11px; transform: translateX(-50%) scale(.8); }
   .event-sheet h2 { font-size: 15px; }
