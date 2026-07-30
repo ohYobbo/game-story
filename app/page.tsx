@@ -19,6 +19,9 @@ type Staff = {
 
 type ProductionStage = "planning" | "coding" | "graphics" | "sound" | "debug";
 
+type DirectionKey = "cuteness" | "realism" | "approachability" | "niche" | "simplicity" | "innovation" | "gameWorld" | "polish";
+type DirectionPoints = Record<DirectionKey, number>;
+
 type FanSegments = {
   kids: number;
   teens: number;
@@ -57,6 +60,7 @@ type Project = {
   sequelOf?: string;
   itemUses?: number;
   eventCount?: number;
+  directionPoints?: DirectionPoints;
 };
 
 type ConsoleSpec = {
@@ -154,10 +158,32 @@ const THEMES = ["幻想", "忍者", "侦探", "小镇", "机器人"];
 const EXTRA_GENRES = ["射击", "竞速", "桌游", "格斗", "音乐"];
 const EXTRA_THEMES = ["太空", "校园", "历史", "体育", "怪物"];
 const DIRECTIONS = [
-  { name: "均衡", note: "稳妥推进" },
-  { name: "重视品质", note: "慢工出细活" },
-  { name: "赶工", note: "快速但易出错" },
+  { name: "均衡", note: "标准成本与进度", cost: 1, speed: 1, quality: 1, target: 1, research: 0 },
+  { name: "赶工", note: "加速但品质下降", cost: 1.2, speed: 1.35, quality: .78, target: .82, research: 0 },
+  { name: "重视品质", note: "较慢但品质提升", cost: 1.3, speed: .82, quality: 1.28, target: 1.2, research: 0 },
+  { name: "研究优先", note: "获得更多研究点", cost: 1.5, speed: .92, quality: .96, target: 1.05, research: 14 },
+  { name: "追加预算", note: "速度与品质兼顾", cost: 2, speed: 1.2, quality: 1.18, target: .9, research: 4 },
 ];
+const DIRECTION_AXES: { key: DirectionKey; label: string; note: string }[] = [
+  { key: "cuteness", label: "可爱", note: "儿童・女性" },
+  { key: "realism", label: "写实", note: "成人・男性" },
+  { key: "approachability", label: "亲和", note: "大众玩家" },
+  { key: "niche", label: "核心向", note: "青少年・话题" },
+  { key: "simplicity", label: "简洁", note: "趣味・银发族" },
+  { key: "innovation", label: "创新", note: "创意・男性" },
+  { key: "gameWorld", label: "世界观", note: "创意・画面" },
+  { key: "polish", label: "完成度", note: "全品质・少漏洞" },
+];
+const DEFAULT_DIRECTION_POINTS: DirectionPoints = {
+  cuteness: 0,
+  realism: 0,
+  approachability: 0,
+  niche: 0,
+  simplicity: 0,
+  innovation: 0,
+  gameWorld: 0,
+  polish: 0,
+};
 const GREAT_COMBOS = new Set([
   "角色扮演|幻想", "动作|忍者", "冒险|侦探", "模拟|小镇", "动作|机器人",
   "射击|太空", "竞速|体育", "音乐|校园", "格斗|怪物", "桌游|历史",
@@ -244,6 +270,17 @@ const getKnowledgeLevel = (experience = 0) => clamp(1 + Math.floor(experience / 
 const getOfficeCapacity = (level: number) => level >= 3 ? 8 : level === 2 ? 6 : 4;
 const getSalesRank = (weeklySales: number, currentYear: number) =>
   clamp(Math.round(42 - weeklySales / Math.max(1300, 2500 + currentYear * 420) * 18), 1, 50);
+const getDirectionConfig = (name: string) => DIRECTIONS.find((item) => item.name === name) ?? DIRECTIONS[0];
+
+function getDirectionBoosts(points: DirectionPoints) {
+  return {
+    fun: points.approachability * .45 + points.simplicity * .5 + points.niche * .15,
+    creativity: points.innovation * .6 + points.gameWorld * .35 + points.niche * .3,
+    graphics: points.cuteness * .45 + points.realism * .45 + points.polish * .4 + points.gameWorld * .2,
+    sound: points.realism * .2 + points.polish * .35 + points.gameWorld * .15,
+    hype: points.niche * .8 + points.cuteness * .3 + points.innovation * .4,
+  };
+}
 
 function normalizeStaff(member: Staff): Staff {
   const roleMap: Record<string, string> = {
@@ -289,8 +326,7 @@ function getStageTarget(stage: ProductionStage, direction: string): number {
     sound: 68,
     debug: 1,
   };
-  const modifier = direction === "重视品质" ? 1.2 : direction === "赶工" ? .82 : 1;
-  return Math.round(targets[stage] * modifier);
+  return Math.round(targets[stage] * getDirectionConfig(direction).target);
 }
 
 function loadSave(): SaveState | null {
@@ -390,6 +426,7 @@ export default function Home() {
   const [selectedGenre, setSelectedGenre] = useState(GENRES[0]);
   const [selectedTheme, setSelectedTheme] = useState(THEMES[0]);
   const [selectedDirection, setSelectedDirection] = useState(DIRECTIONS[0].name);
+  const [selectedDirectionPoints, setSelectedDirectionPoints] = useState<DirectionPoints>(DEFAULT_DIRECTION_POINTS);
   const [gameName, setGameName] = useState("像素勇者");
   const [selectedStaffId, setSelectedStaffId] = useState<number | null>(null);
   const [consoleCpu, setConsoleCpu] = useState(CONSOLE_CPUS[0].name);
@@ -499,6 +536,14 @@ export default function Home() {
       performance: Number(((cpu.power + media.power + body.power) / 3).toFixed(2)),
     };
   }, [consoleCpu, consoleMedia, consoleBody]);
+  const selectedGenreLevel = getKnowledgeLevel(genreExperience[selectedGenre] ?? 0);
+  const directionPointBudget = 8 + (selectedGenreLevel >= 2 ? 2 : 0) + (selectedGenreLevel >= 5 ? 2 : 0);
+  const spentDirectionPoints = Object.values(selectedDirectionPoints).reduce((sum, value) => sum + value, 0);
+  const remainingDirectionPoints = directionPointBudget - spentDirectionPoints;
+  const selectedDirectionConfig = getDirectionConfig(selectedDirection);
+  const selectedDevelopmentCost = Math.round(
+    (availablePlatforms.find((item) => item.name === selectedPlatform)?.cost ?? 0) * selectedDirectionConfig.cost,
+  );
   const activeStage = project?.kind === "game" ? (project.stage ?? "coding") : null;
   const projectPercent = project
     ? project.kind === "game"
@@ -514,6 +559,10 @@ export default function Home() {
       setSelectedPlatform(availablePlatforms[0]?.name ?? "个人电脑");
     }
   }, [availablePlatforms, selectedPlatform]);
+
+  useEffect(() => {
+    setSelectedDirectionPoints(DEFAULT_DIRECTION_POINTS);
+  }, [selectedGenre]);
 
   useEffect(() => {
     if (project?.kind === "game" && project.stage !== "debug" && !project.leadName && !modal) {
@@ -602,6 +651,7 @@ export default function Home() {
     const reputationChange = totalScore >= 34 ? 8 : totalScore >= 28 ? 4 : totalScore >= 22 ? 1 : -4;
     const fanGrowth = Math.max(4, Math.round(sales / 220));
     const audienceScale = clamp(totalScore / 28, .6, 1.6);
+    const directionPoints = finished.directionPoints ?? DEFAULT_DIRECTION_POINTS;
     setCash((value) => value + income);
     setFans((value) => value + fanGrowth);
     setFanSegments((segments) => {
@@ -609,10 +659,16 @@ export default function Home() {
       for (const [key, value] of Object.entries(audience.gains) as [keyof FanSegments, number][]) {
         next[key] += Math.max(1, Math.round(value * audienceScale));
       }
+      next.kids += Math.round((directionPoints.cuteness + directionPoints.approachability) * audienceScale);
+      next.teens += Math.round(directionPoints.niche * 1.4 * audienceScale);
+      next.adults += Math.round(directionPoints.realism * audienceScale);
+      next.seniors += Math.round(directionPoints.simplicity * audienceScale);
+      next.male += Math.round((directionPoints.realism + directionPoints.innovation) * .6 * audienceScale);
+      next.female += Math.round((directionPoints.cuteness + directionPoints.approachability) * .6 * audienceScale);
       return next;
     });
     setReputation((value) => clamp(value + reputationChange, 0, 100));
-    setResearch((value) => value + 7 + Math.round(totalScore / 8));
+    setResearch((value) => value + 7 + Math.round(totalScore / 8) + getDirectionConfig(finished.direction).research);
     setReleases((items) => {
       const prior = items.map((item) => item.name === finished.sequelOf ? { ...item, sequelEligible: false } : item);
       return [{
@@ -829,7 +885,8 @@ export default function Home() {
       );
 
       if (project) {
-        const directionModifier = project.direction === "赶工" ? 1.35 : project.direction === "重视品质" ? 0.82 : 1;
+        const directionConfig = getDirectionConfig(project.direction);
+        const directionModifier = directionConfig.speed;
         const energyModifier = staff.reduce((sum, member) => sum + member.energy, 0) / (staff.length * 100);
         setProject((current) => {
           if (!current) return null;
@@ -854,8 +911,9 @@ export default function Home() {
             if (!current.leadName || !current.leadSkill) return current;
             const leadSkill = current.leadSkill;
             const gain = (totalPower / 42 + leadSkill / 6) * directionModifier * energyModifier * (0.82 + Math.random() * .36);
-            const qualityModifier = current.direction === "重视品质" ? 1.28 : current.direction === "赶工" ? .78 : 1;
+            const qualityModifier = directionConfig.quality;
             const qualityGain = (leadSkill / 24 + totalPower / 360) * qualityModifier * (0.8 + Math.random() * .35);
+            const polishProtection = 1 - Math.min(.28, (current.directionPoints?.polish ?? 0) * .035);
             let next = {
               ...current,
               progress: current.progress + gain,
@@ -866,8 +924,8 @@ export default function Home() {
               graphics: current.graphics + (stage === "graphics" ? qualityGain * 1.15 : 0),
               sound: current.sound + (stage === "sound" ? qualityGain * 1.2 : 0),
               bugs: current.bugs + (stage === "coding"
-                ? (current.direction === "赶工" ? Math.random() * 1.8 : Math.random() * 1.25)
-                : Math.random() * .18),
+                ? (current.direction === "赶工" ? Math.random() * 1.8 : Math.random() * 1.25) * polishProtection
+                : Math.random() * .18 * polishProtection),
             };
             if (
               isNewWeek &&
@@ -966,7 +1024,7 @@ export default function Home() {
           }
 
           const gain = (totalPower / 22) * directionModifier * energyModifier * (0.85 + Math.random() * 0.3);
-          const qualityGain = (totalPower / 105) * (current.direction === "重视品质" ? 1.35 : 1);
+          const qualityGain = (totalPower / 105) * directionConfig.quality;
           const next = {
             ...current,
             progress: current.progress + gain,
@@ -1017,14 +1075,16 @@ export default function Home() {
     const platform = availablePlatforms.find((item) => item.name === selectedPlatform) ?? availablePlatforms[0];
     if (!platform) return announce("目前没有可用平台");
     if (project) return announce("当前项目完成后才能开发新作");
-    if (cash < platform.cost) return announce("资金不足，先接一份外包吧");
+    if (remainingDirectionPoints > 0) return announce(`还有 ${remainingDirectionPoints} 点开发方向尚未分配`);
+    if (cash < selectedDevelopmentCost) return announce("资金不足，先接一份外包吧");
     const sequel = releases.find((item) => item.name === selectedSequelName && item.sequelEligible);
     const gameGenre = sequel?.genre ?? selectedGenre;
     const gameTheme = sequel?.theme ?? selectedTheme;
     const comboBoost = GREAT_COMBOS.has(`${gameGenre}|${gameTheme}`) ? 5 : 0;
     const sequelBoost = sequel ? 7 + Math.floor(sequel.score / 8) : 0;
     const masteryBoost = getKnowledgeLevel(genreExperience[gameGenre] ?? 0) + getKnowledgeLevel(themeExperience[gameTheme] ?? 0) - 2;
-    setCash((value) => value - platform.cost);
+    const directionBoosts = getDirectionBoosts(selectedDirectionPoints);
+    setCash((value) => value - selectedDevelopmentCost);
     setProject({
       kind: "game",
       name: gameName.trim() || "无名游戏",
@@ -1033,13 +1093,13 @@ export default function Home() {
       theme: gameTheme,
       direction: selectedDirection,
       progress: 0,
-      target: selectedDirection === "重视品质" ? 330 : selectedDirection === "赶工" ? 210 : 270,
-      fun: 6 + comboBoost + masteryBoost + sequelBoost,
-      creativity: 5 + comboBoost + masteryBoost + sequelBoost,
-      graphics: 4 + Math.floor(masteryBoost / 2) + sequelBoost,
-      sound: 3 + Math.floor(masteryBoost / 2) + sequelBoost,
+      target: Math.round(270 * selectedDirectionConfig.target),
+      fun: 6 + comboBoost + masteryBoost + sequelBoost + directionBoosts.fun,
+      creativity: 5 + comboBoost + masteryBoost + sequelBoost + directionBoosts.creativity,
+      graphics: 4 + Math.floor(masteryBoost / 2) + sequelBoost + directionBoosts.graphics,
+      sound: 3 + Math.floor(masteryBoost / 2) + sequelBoost + directionBoosts.sound,
       bugs: 0,
-      hype: 2,
+      hype: 2 + directionBoosts.hype,
       marketUsers: platform.users,
       stage: "planning",
       stageProgress: 0,
@@ -1048,11 +1108,20 @@ export default function Home() {
       sequelOf: sequel?.name,
       itemUses: 0,
       eventCount: 0,
+      directionPoints: selectedDirectionPoints,
     });
     setSelectedSequelName("");
+    setSelectedDirectionPoints(DEFAULT_DIRECTION_POINTS);
     setModal("stage");
     setPaused(true);
     announce("企划通过，请选择负责人");
+  };
+
+  const adjustDirectionPoint = (key: DirectionKey, delta: number) => {
+    setSelectedDirectionPoints((points) => {
+      if (delta > 0 && Object.values(points).reduce((sum, value) => sum + value, 0) >= directionPointBudget) return points;
+      return { ...points, [key]: clamp(points[key] + delta, 0, 10) };
+    });
   };
 
   const assignStageLead = (member: Staff) => {
@@ -1582,7 +1651,25 @@ export default function Home() {
                 <div className="direction-row">
                   {DIRECTIONS.map((item) => <button key={item.name} className={selectedDirection === item.name ? "selected" : ""} onClick={() => setSelectedDirection(item.name)}><b>{item.name}</b><small>{item.note}</small></button>)}
                 </div>
-                <button className="primary-button" onClick={startGame}>通过企划 · 开始制作</button>
+                <div className="direction-points-head">
+                  <span><b>开发方向</b><small>类型 Lv.2 / Lv.5 会增加可分配点数</small></span>
+                  <strong className={remainingDirectionPoints === 0 ? "is-ready" : ""}>剩余 {remainingDirectionPoints}</strong>
+                </div>
+                <div className="direction-points-grid">
+                  {DIRECTION_AXES.map((axis) => (
+                    <div className="direction-axis" key={axis.key}>
+                      <span><b>{axis.label}</b><small>{axis.note}</small></span>
+                      <div>
+                        <button aria-label={`${axis.label}减少`} onClick={() => adjustDirectionPoint(axis.key, -1)} disabled={selectedDirectionPoints[axis.key] <= 0}>−</button>
+                        <strong>{selectedDirectionPoints[axis.key]}</strong>
+                        <button aria-label={`${axis.label}增加`} onClick={() => adjustDirectionPoint(axis.key, 1)} disabled={selectedDirectionPoints[axis.key] >= 10 || remainingDirectionPoints <= 0}>＋</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <button className="primary-button" onClick={startGame}>
+                  {remainingDirectionPoints > 0 ? `分配剩余 ${remainingDirectionPoints} 点` : `通过企划 · ${formatCash(selectedDevelopmentCost)}`}
+                </button>
               </div>
             )}
           </ModalShell>

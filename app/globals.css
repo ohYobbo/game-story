@@ -1382,7 +1382,7 @@ button {
 
 .direction-row {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 8px;
   margin-bottom: 14px;
 }
@@ -1402,6 +1402,107 @@ button {
 
 .direction-row b { font-size: 11px; }
 .direction-row small { margin-top: 2px; color: #766f5e; font-size: 8px; }
+
+.direction-points-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 3px 0 7px;
+}
+
+.direction-points-head span,
+.direction-points-head small {
+  display: block;
+}
+
+.direction-points-head b {
+  font-size: 11px;
+}
+
+.direction-points-head small {
+  margin-top: 2px;
+  color: #77715e;
+  font-size: 8px;
+}
+
+.direction-points-head strong {
+  padding: 5px 8px;
+  border: 2px solid #9b6a43;
+  border-radius: 4px;
+  background: #fff0a8;
+  color: #9b4b2a;
+  font-size: 10px;
+}
+
+.direction-points-head strong.is-ready {
+  border-color: #4e8057;
+  background: #cfe9ae;
+  color: #316b45;
+}
+
+.direction-points-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.direction-axis {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  padding: 5px 6px 5px 8px;
+  border: 2px solid #9b9b8b;
+  border-radius: 4px;
+  background: #f7f3df;
+  box-shadow: inset 0 0 0 2px #fffdf3;
+}
+
+.direction-axis > span b,
+.direction-axis > span small {
+  display: block;
+}
+
+.direction-axis > span b {
+  font-size: 10px;
+}
+
+.direction-axis > span small {
+  margin-top: 2px;
+  color: #807765;
+  font-size: 7px;
+}
+
+.direction-axis > div {
+  display: grid;
+  grid-template-columns: 25px 22px 25px;
+  align-items: center;
+  text-align: center;
+}
+
+.direction-axis button {
+  width: 25px;
+  height: 25px;
+  padding: 0;
+  border: 2px solid #697773;
+  border-radius: 3px;
+  background: #8fc4bd;
+  box-shadow: 0 2px #4f6564;
+  color: #183d42;
+  font-size: 14px;
+  font-weight: 1000;
+  line-height: 18px;
+}
+
+.direction-axis button:disabled {
+  opacity: .35;
+  box-shadow: none;
+}
+
+.direction-axis strong {
+  font-size: 11px;
+}
 
 .primary-button {
   width: 100%;
@@ -2490,7 +2591,15 @@ button {
   .field-label input,
   .field-label select { height: 35px; border-width: 2px; font-size: 11px; }
   .direction-row { gap: 5px; }
-  .direction-row button { border-width: 2px; }
+  .direction-row button { min-height: 48px; border-width: 2px; }
+  .direction-row b { font-size: 8px; }
+  .direction-row small { font-size: 6px; }
+  .direction-points-grid { gap: 4px; }
+  .direction-axis { min-height: 40px; padding: 4px; border-width: 2px; }
+  .direction-axis > span b { font-size: 8px; }
+  .direction-axis > span small { font-size: 6px; }
+  .direction-axis > div { grid-template-columns: 22px 18px 22px; }
+  .direction-axis button { width: 22px; height: 22px; border-width: 2px; }
   .list-cards > button { min-height: 61px; border-width: 2px; }
   .list-icon { width: 38px; height: 38px; }
   .staff-summary { align-items: flex-start; gap: 6px; }
