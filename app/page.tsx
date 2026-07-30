@@ -56,6 +56,7 @@ type Project = {
   consoleSpec?: ConsoleSpec;
   sequelOf?: string;
   itemUses?: number;
+  eventCount?: number;
 };
 
 type ConsoleSpec = {
@@ -81,6 +82,8 @@ type Release = {
   genre?: string;
   theme?: string;
   sequelEligible?: boolean;
+  weeklyRank?: number;
+  fanLetterSent?: boolean;
 };
 
 type Inventory = {
@@ -119,10 +122,11 @@ type SaveState = {
   inventory?: Inventory;
   merchantYear?: number;
   merchantPurchases?: number;
+  industryNews?: string;
 };
 
 type EventData = {
-  kind: "payroll" | "expo" | "awards" | "console" | "market" | "ending";
+  kind: "payroll" | "expo" | "awards" | "console" | "market" | "ending" | "development" | "fanmail" | "office";
   title: string;
   headline: string;
   body: string;
@@ -224,6 +228,7 @@ const HIRING_METHODS = [
   { name: "网络招聘", note: "新人到资深人士都有", cost: 1900, quality: 2 },
   { name: "校园宣讲会", note: "寻找潜力出众的新人", cost: 2800, quality: 3, level: 2 },
   { name: "公开选拔会", note: "高价搜罗明星人才", cost: 4800, quality: 4, level: 2 },
+  { name: "全球猎头", note: "在世界范围寻找顶尖开发者", cost: 7500, quality: 5, level: 3 },
 ];
 
 const contracts = [
@@ -236,6 +241,9 @@ const formatCash = (value: number) => `¥${Math.max(0, Math.round(value)).toLoca
 const formatUsers = (value: number) => value >= 10_000 ? `${Math.round(value / 10_000)}万` : value.toLocaleString();
 const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
 const getKnowledgeLevel = (experience = 0) => clamp(1 + Math.floor(experience / 2), 1, 5);
+const getOfficeCapacity = (level: number) => level >= 3 ? 8 : level === 2 ? 6 : 4;
+const getSalesRank = (weeklySales: number, currentYear: number) =>
+  clamp(Math.round(42 - weeklySales / Math.max(1300, 2500 + currentYear * 420) * 18), 1, 50);
 
 function normalizeStaff(member: Staff): Staff {
   const roleMap: Record<string, string> = {
@@ -373,6 +381,7 @@ export default function Home() {
   const [inventory, setInventory] = useState<Inventory>(INITIAL_INVENTORY);
   const [merchantYear, setMerchantYear] = useState(0);
   const [merchantPurchases, setMerchantPurchases] = useState(0);
+  const [industryNews, setIndustryNews] = useState("小型工作室“像素工坊”正式成立！");
   const [speed, setSpeed] = useState(1);
   const [paused, setPaused] = useState(false);
   const [modal, setModal] = useState<Modal>(null);
@@ -395,6 +404,7 @@ export default function Home() {
     audience: string;
     reputationChange: number;
     growth: string;
+    salesRank: number;
   } | null>(null);
   const [eventData, setEventData] = useState<EventData | null>(null);
   const tickRef = useRef(0);
@@ -428,8 +438,14 @@ export default function Home() {
       genre: item.genre ?? "角色扮演",
       theme: item.theme ?? "幻想",
       sequelEligible: item.sequelEligible ?? item.score >= 32,
+      weeklyRank: item.weeklyRank ?? getSalesRank(item.weeklySales ?? 0, saved.year),
     })));
-    setCompanyLevel(saved.companyLevel);
+    const migratedCompanyLevel = saved.staff.length > 6
+      ? 3
+      : saved.staff.length > 4
+        ? Math.max(2, saved.companyLevel)
+        : saved.companyLevel;
+    setCompanyLevel(migratedCompanyLevel);
     setAwards(saved.awards ?? 0);
     setOwnConsole(saved.ownConsole ?? false);
     setConsoleUsers(saved.consoleUsers ?? 0);
@@ -446,6 +462,7 @@ export default function Home() {
     setInventory(saved.inventory ?? INITIAL_INVENTORY);
     setMerchantYear(saved.merchantYear ?? 0);
     setMerchantPurchases(saved.merchantPurchases ?? 0);
+    setIndustryNews(saved.industryNews ?? "游戏行业正在迎来新一轮主机竞争。");
   }, []);
 
   const availablePlatforms = useMemo(() => {
@@ -469,6 +486,9 @@ export default function Home() {
   );
   const selectedStaff = staff.find((member) => member.id === selectedStaffId) ?? null;
   const sequelCandidates = releases.filter((item) => item.sequelEligible && item.genre && item.theme);
+  const chartLeader = releases
+    .filter((item) => (item.weeklySales ?? 0) > 0)
+    .sort((a, b) => (a.weeklyRank ?? 99) - (b.weeklyRank ?? 99))[0];
   const hasHardwareEngineer = staff.some((member) => member.role === "硬件工程师" || member.role === "黑客");
   const selectedConsoleSpec = useMemo(() => {
     const cpu = CONSOLE_CPUS.find((item) => item.name === consoleCpu) ?? CONSOLE_CPUS[0];
@@ -512,7 +532,7 @@ export default function Home() {
       cash, fans, research, year, month, week, staff, project, releases, companyLevel,
       awards, ownConsole, consoleUsers, lastEventKey, fanSegments, reputation,
       genreExperience, themeExperience, unlockedGenres, unlockedThemes, careerManuals,
-      endingShown, endingScore, inventory, merchantYear, merchantPurchases,
+      endingShown, endingScore, inventory, merchantYear, merchantPurchases, industryNews,
     };
     window.localStorage.setItem("pixel-studio-save", JSON.stringify(state));
     announce("已保存到这台设备");
@@ -569,6 +589,7 @@ export default function Home() {
     const marketMultiplier = clamp((finished.marketUsers ?? 280_000) / 520_000, 0.7, 3.4);
     const sales = Math.round((totalScore ** 2 * 24 + finished.hype * 95 + fans * 2.4) * marketMultiplier * (0.85 + Math.random() * 0.3));
     const income = Math.round(sales * 0.018);
+    const salesRank = getSalesRank(sales, year);
     const audience = getAudience(finished.genre, finished.theme);
     const oldGenreLevel = getKnowledgeLevel(genreExperience[finished.genre] ?? 0);
     const oldThemeLevel = getKnowledgeLevel(themeExperience[finished.theme] ?? 0);
@@ -609,6 +630,8 @@ export default function Home() {
         genre: finished.genre,
         theme: finished.theme,
         sequelEligible: totalScore >= 32,
+        weeklyRank: salesRank,
+        fanLetterSent: false,
       }, ...prior].slice(0, 12);
     });
     if (finished.platform === "像素盒子") {
@@ -618,7 +641,8 @@ export default function Home() {
     const growth = `${finished.genre} Lv.${nextGenreLevel} · ${finished.theme} Lv.${nextThemeLevel}${
       nextGenreLevel > oldGenreLevel || nextThemeLevel > oldThemeLevel ? "  熟练度提升！" : ""
     }`;
-    setReview({ name: finished.name, scores, sales, income, audience: audience.label, reputationChange, growth });
+    setIndustryNews(`《${finished.name}》首周销量 ${sales.toLocaleString()} 套，登上周榜第 ${salesRank} 名！`);
+    setReview({ name: finished.name, scores, sales, income, audience: audience.label, reputationChange, growth, salesRank });
     setModal("review");
   };
 
@@ -730,6 +754,19 @@ export default function Home() {
   }, [year, month, week, lastEventKey, releases, staff, companyLevel, modal, endingShown, cash, fans, awards, ownConsole, reputation]);
 
   useEffect(() => {
+    if (week !== 1 || modal) return;
+    const chartEntry = releases
+      .filter((item) => (item.weeklySales ?? 0) > 0)
+      .sort((a, b) => (a.weeklyRank ?? 99) - (b.weeklyRank ?? 99))[0];
+    if (chartEntry) {
+      setIndustryNews(`本月销量快讯：《${chartEntry.name}》以每周 ${(chartEntry.weeklySales ?? 0).toLocaleString()} 套位列第 ${chartEntry.weeklyRank ?? "—"} 名。`);
+    } else {
+      const platform = availablePlatforms[availablePlatforms.length - 1];
+      setIndustryNews(`${platform?.name ?? "个人电脑"}市场持续升温，玩家期待下一款热门作品。`);
+    }
+  }, [month, week, modal, releases, availablePlatforms]);
+
+  useEffect(() => {
     if (paused || modal) return;
     const interval = window.setInterval(() => {
       tickRef.current += 1;
@@ -739,6 +776,7 @@ export default function Home() {
         let weeklyIncome = 0;
         let weeklyFans = 0;
         let ownPlatformSales = 0;
+        let fanLetterTitle = "";
         const nextReleases = releases.map((item) => {
           const currentWeekly = item.weeklySales ?? 0;
           const remaining = item.remainingDemand ?? 0;
@@ -750,6 +788,8 @@ export default function Home() {
           weeklyIncome += income;
           weeklyFans += Math.round(nextWeekly / 6500);
           if (item.platform === "像素盒子") ownPlatformSales += nextWeekly;
+          const shouldSendFanLetter = !project && !fanLetterTitle && !item.fanLetterSent && item.score >= 28 && item.weeks >= 2 && nextWeekly > 0;
+          if (shouldSendFanLetter) fanLetterTitle = item.name;
           return {
             ...item,
             sales: item.sales + nextWeekly,
@@ -757,12 +797,29 @@ export default function Home() {
             weeks: item.weeks + 1,
             weeklySales: nextWeekly,
             remainingDemand: Math.max(0, remaining - nextWeekly),
+            weeklyRank: nextWeekly > 0 ? getSalesRank(nextWeekly, year) : item.weeklyRank,
+            fanLetterSent: item.fanLetterSent || shouldSendFanLetter,
           };
         });
         setReleases(nextReleases);
         if (weeklyIncome) setCash((value) => value + weeklyIncome);
         if (weeklyFans) setFans((value) => value + weeklyFans);
         if (ownPlatformSales) setConsoleUsers((value) => value + Math.round(ownPlatformSales * .025));
+        if (fanLetterTitle) {
+          setFans((value) => value + 90);
+          setFanSegments((segments) => ({ ...segments, teens: segments.teens + 3, female: segments.female + 2 }));
+          setIndustryNews(`玩家来信称赞《${fanLetterTitle}》，工作室人气持续上升。`);
+          window.setTimeout(() => {
+            setEventData({
+              kind: "fanmail",
+              title: "玩家来信",
+              headline: `“《${fanLetterTitle}》太好玩了！”`,
+              body: "一封热情的玩家来信送到了办公室。团队士气大振，年轻玩家与女性玩家群体的支持也有所提升。",
+              reward: "粉丝 +90 · 青少年支持度 +3 · 女性支持度 +2",
+            });
+            setModal("event");
+          }, 60);
+        }
       }
       setStaff((members) =>
         members.map((member) => ({
@@ -799,7 +856,7 @@ export default function Home() {
             const gain = (totalPower / 42 + leadSkill / 6) * directionModifier * energyModifier * (0.82 + Math.random() * .36);
             const qualityModifier = current.direction === "重视品质" ? 1.28 : current.direction === "赶工" ? .78 : 1;
             const qualityGain = (leadSkill / 24 + totalPower / 360) * qualityModifier * (0.8 + Math.random() * .35);
-            const next = {
+            let next = {
               ...current,
               progress: current.progress + gain,
               stageProgress: (current.stageProgress ?? 0) + gain,
@@ -812,6 +869,68 @@ export default function Home() {
                 ? (current.direction === "赶工" ? Math.random() * 1.8 : Math.random() * 1.25)
                 : Math.random() * .18),
             };
+            if (
+              isNewWeek &&
+              (next.eventCount ?? 0) < 2 &&
+              (next.elapsedWeeks ?? 0) >= 2 &&
+              (next.stageProgress ?? 0) < (next.stageTarget ?? 1) * .86 &&
+              Math.random() < .16
+            ) {
+              const eventIndex = Math.floor(Math.random() * 4);
+              const event = [
+                {
+                  headline: "游戏杂志前来采访！",
+                  body: "开发画面登上杂志专题，作品热度迅速上升。",
+                  reward: "热度 +14 · 粉丝 +45",
+                  apply: () => ({ ...next, hype: next.hype + 14 }),
+                  fans: 45,
+                  research: 0,
+                },
+                {
+                  headline: "团队灵感爆发！",
+                  body: "一次热烈讨论带来了突破性的玩法点子。",
+                  reward: "趣味 +7 · 创意 +7",
+                  apply: () => ({ ...next, fun: next.fun + 7, creativity: next.creativity + 7 }),
+                  fans: 0,
+                  research: 0,
+                },
+                {
+                  headline: "办公室突然停电！",
+                  body: "部分开发进度没有及时保存，团队只能重新制作。",
+                  reward: "阶段进度下降 · 漏洞 +3",
+                  apply: () => ({
+                    ...next,
+                    stageProgress: Math.max(0, (next.stageProgress ?? 0) - 10),
+                    progress: Math.max(0, next.progress - 10),
+                    bugs: next.bugs + 3,
+                  }),
+                  fans: 0,
+                  research: 0,
+                },
+                {
+                  headline: "测试机发生故障！",
+                  body: "硬件故障暴露了隐藏问题，不过团队也因此积累了研究经验。",
+                  reward: "漏洞 +2 · 研究 +5",
+                  apply: () => ({ ...next, bugs: next.bugs + 2 }),
+                  fans: 0,
+                  research: 5,
+                },
+              ][eventIndex];
+              next = { ...event.apply(), eventCount: (next.eventCount ?? 0) + 1 };
+              if (event.fans) setFans((value) => value + event.fans);
+              if (event.research) setResearch((value) => value + event.research);
+              setIndustryNews(event.headline);
+              window.setTimeout(() => {
+                setEventData({
+                  kind: "development",
+                  title: "开发事件",
+                  headline: event.headline,
+                  body: event.body,
+                  reward: event.reward,
+                });
+                setModal("event");
+              }, 60);
+            }
             if ((next.stageProgress ?? 0) >= (next.stageTarget ?? 1)) {
               const stageIndex = STAGE_ORDER.indexOf(stage);
               const nextStage = STAGE_ORDER[stageIndex + 1] ?? "debug";
@@ -877,12 +996,12 @@ export default function Home() {
         cash, fans, research, year, month, week, staff, project, releases, companyLevel,
         awards, ownConsole, consoleUsers, lastEventKey, fanSegments, reputation,
         genreExperience, themeExperience, unlockedGenres, unlockedThemes, careerManuals,
-        endingShown, endingScore, inventory, merchantYear, merchantPurchases,
+        endingShown, endingScore, inventory, merchantYear, merchantPurchases, industryNews,
       };
       window.localStorage.setItem("pixel-studio-save", JSON.stringify(state));
     }, 8000);
     return () => window.clearInterval(timer);
-  }, [cash, fans, research, year, month, week, staff, project, releases, companyLevel, awards, ownConsole, consoleUsers, lastEventKey, fanSegments, reputation, genreExperience, themeExperience, unlockedGenres, unlockedThemes, careerManuals, endingShown, endingScore, inventory, merchantYear, merchantPurchases]);
+  }, [cash, fans, research, year, month, week, staff, project, releases, companyLevel, awards, ownConsole, consoleUsers, lastEventKey, fanSegments, reputation, genreExperience, themeExperience, unlockedGenres, unlockedThemes, careerManuals, endingShown, endingScore, inventory, merchantYear, merchantPurchases, industryNews]);
 
   const openMenu = (nextModal: Modal) => {
     setModal(nextModal);
@@ -928,6 +1047,7 @@ export default function Home() {
       elapsedWeeks: 0,
       sequelOf: sequel?.name,
       itemUses: 0,
+      eventCount: 0,
     });
     setSelectedSequelName("");
     setModal("stage");
@@ -974,7 +1094,7 @@ export default function Home() {
 
   const startConsoleProject = () => {
     if (project) return announce("当前项目完成后才能研发主机");
-    if (companyLevel < 2 || releases.length < 2) return announce("扩建办公室并发售 2 款游戏后解锁");
+    if (companyLevel < 3 || releases.length < 2) return announce("搬入大楼办公室并发售 2 款游戏后解锁");
     if (!hasHardwareEngineer) return announce("团队需要 1 名硬件工程师");
     const cpu = CONSOLE_CPUS.find((item) => item.name === consoleCpu) ?? CONSOLE_CPUS[0];
     const media = CONSOLE_MEDIA.find((item) => item.name === consoleMedia) ?? CONSOLE_MEDIA[0];
@@ -1203,8 +1323,8 @@ export default function Home() {
   };
 
   const hireWithMethod = (method: (typeof HIRING_METHODS)[number]) => {
-    if (companyLevel === 1 && staff.length >= 6) return announce("当前办公室最多容纳 6 人");
-    if (staff.length >= 8) return announce("办公室已经满员");
+    const capacity = getOfficeCapacity(companyLevel);
+    if (staff.length >= capacity) return announce(`当前办公室最多容纳 ${capacity} 人`);
     if (cash < method.cost) return announce("资金不足");
     const id = Math.max(0, ...staff.map((member) => member.id)) + 1;
     const candidates = [
@@ -1256,11 +1376,27 @@ export default function Home() {
   };
 
   const expandOffice = () => {
-    if (cash < 7000) return announce("扩建需要 ¥7,000千");
-    setCash((value) => value - 7000);
-    setCompanyLevel(2);
-    closeModal();
-    announce("新办公室启用！可招聘 8 名员工");
+    if (companyLevel >= 3) return announce("已经搬入最大的办公室");
+    const nextLevel = companyLevel + 1;
+    const cost = nextLevel === 2 ? 7000 : 12_000;
+    if (nextLevel === 3 && awards < 1 && year < 10) {
+      return announce("获得至少 1 次奖项，或经营到第 10 年后解锁大楼办公室");
+    }
+    if (cash < cost) return announce(`扩建需要 ${formatCash(cost)}`);
+    setCash((value) => value - cost);
+    setCompanyLevel(nextLevel);
+    setIndustryNews(`像素工坊迁入第 ${nextLevel} 阶段办公室，团队规模进一步扩大。`);
+    setEventData({
+      kind: "office",
+      title: "办公室搬迁",
+      headline: nextLevel === 2 ? "更宽敞的新办公室启用！" : "梦想中的游戏大楼落成！",
+      body: nextLevel === 2
+        ? "团队拥有了更多工位，也解锁了更高级的招聘与培训方式。"
+        : "八个工位、专用会议区与硬件实验室全部就绪，工作室正式迈入顶级开发商行列。",
+      reward: `员工上限提升至 ${getOfficeCapacity(nextLevel)} 人`,
+    });
+    setModal("event");
+    setPaused(true);
   };
 
   return (
@@ -1304,6 +1440,12 @@ export default function Home() {
             <span>◆ 研究 {research}</span>
           </div>
         </section>
+
+        <div className="news-strip" aria-live="polite">
+          <b>NEWS</b>
+          <span>{industryNews}</span>
+          {chartLeader && <em>周榜 #{chartLeader.weeklyRank ?? "—"}</em>}
+        </div>
 
         <section className="project-console" aria-live="polite">
           {project ? (
@@ -1392,16 +1534,16 @@ export default function Home() {
                     <small>
                       {ownConsole
                         ? `当前用户 ${formatUsers(consoleUsers)} · 可直接选择自家平台开发`
-                        : companyLevel >= 2 && releases.length >= 2
+                        : companyLevel >= 3 && releases.length >= 2
                           ? hasHardwareEngineer
                             ? "配置芯片、媒体与机型，打造自家游戏平台"
                             : "需要培养 1 名硬件工程师"
-                          : "扩建办公室并发售 2 款游戏后解锁"}
+                          : "搬入大楼办公室并发售 2 款游戏后解锁"}
                     </small>
                   </span>
-                  {!ownConsole && <button onClick={() => setModal("console")} disabled={companyLevel < 2 || releases.length < 2 || !hasHardwareEngineer}>配置</button>}
+                  {!ownConsole && <button onClick={() => setModal("console")} disabled={companyLevel < 3 || releases.length < 2 || !hasHardwareEngineer}>配置</button>}
                 </div>
-                {companyLevel >= 2 && sequelCandidates.length > 0 && (
+                {companyLevel >= 3 && sequelCandidates.length > 0 && (
                   <label className="sequel-picker">
                     <span><b>名人堂续作</b><small>继承前作四项品质；续作跌出名人堂会终止系列</small></span>
                     <select value={selectedSequelName} onChange={(event) => {
@@ -1513,7 +1655,7 @@ export default function Home() {
         {modal === "staff" && (
           <ModalShell title="员工管理" onClose={closeModal}>
             <div className="staff-summary">
-              <span>员工 {staff.length}/{companyLevel === 1 ? 6 : 8} 人 · 转职手册 {careerManuals}</span>
+              <span>员工 {staff.length}/{getOfficeCapacity(companyLevel)} 人 · 转职手册 {careerManuals}</span>
               <div><button onClick={() => setModal("shop")}>旅行商人</button><button onClick={() => setModal("hire")}>招聘人才</button></div>
             </div>
             <div className="staff-list">
@@ -1529,7 +1671,11 @@ export default function Home() {
                 </article>
               ))}
             </div>
-            {companyLevel === 1 && <button className="expand-button" onClick={expandOffice}>扩建办公室 · {formatCash(7000)}</button>}
+            {companyLevel < 3 && (
+              <button className="expand-button" onClick={expandOffice}>
+                {companyLevel === 1 ? `搬入六人工坊 · ${formatCash(7000)}` : `搬入八人游戏大楼 · ${formatCash(12_000)}`}
+              </button>
+            )}
           </ModalShell>
         )}
 
@@ -1641,7 +1787,7 @@ export default function Home() {
 
         {modal === "records" && (
           <ModalShell title="公司资料" onClose={closeModal}>
-            <div className="record-hero"><b>像素工坊</b><span>经营第 {year} 年 · 粉丝 {fans.toLocaleString()}</span></div>
+            <div className="record-hero"><b>像素工坊</b><span>经营第 {year} 年 · {getOfficeCapacity(companyLevel)} 人办公室 · 粉丝 {fans.toLocaleString()}</span></div>
             <div className="record-stats">
               <div><small>已发售</small><b>{releases.length}</b></div>
               <div><small>最高评分</small><b>{releases.length ? Math.max(...releases.map((item) => item.score)) : "—"}</b></div>
@@ -1680,7 +1826,7 @@ export default function Home() {
                 <div key={`${item.name}-${index}`}>
                   <span><b>{item.name}{item.sequelEligible ? " · 名人堂" : ""}</b><small>{item.audience ?? "全年龄"} · 发售 {item.weeks} 周</small></span>
                   <em>{item.score}/40</em>
-                  <strong>{item.sales.toLocaleString()} 套<small>本周 {(item.weeklySales ?? 0).toLocaleString()}</small></strong>
+                  <strong>{item.sales.toLocaleString()} 套<small>本周 {(item.weeklySales ?? 0).toLocaleString()} · 第 {item.weeklyRank ?? "—"} 名</small></strong>
                 </div>
               )) : <p>还没有发售作品。第一部传奇正等着你！</p>}
             </div>
@@ -1723,6 +1869,7 @@ export default function Home() {
               <div className="review-total">总分 <b>{review.scores.reduce((sum, score) => sum + score, 0)}</b><span>/40</span></div>
               <div className="sales-result">
                 <span>首周销量 <b>{review.sales.toLocaleString()}</b> 套</span>
+                <span>首周排行 <b>第 {review.salesRank} 名</b></span>
                 <span>销售收入 <b>{formatCash(review.income)}</b></span>
                 <span>核心受众 <b>{review.audience}</b></span>
                 <span>业界口碑 <b>{review.reputationChange >= 0 ? "+" : ""}{review.reputationChange}</b></span>

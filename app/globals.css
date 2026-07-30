@@ -678,6 +678,43 @@ button {
   font-weight: 800;
 }
 
+.news-strip {
+  z-index: 9;
+  flex: 0 0 27px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 10px;
+  overflow: hidden;
+  border-bottom: 3px solid #29414d;
+  background: #fff8d9;
+  color: #625c4c;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.news-strip b {
+  padding: 2px 5px;
+  background: #d95f43;
+  color: #fff;
+  font-size: 8px;
+  letter-spacing: 1px;
+}
+
+.news-strip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.news-strip em {
+  color: #387f9e;
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 1000;
+}
+
 .project-console {
   flex: 0 0 174px;
   padding: 10px 14px;
@@ -2138,6 +2175,9 @@ button {
 .event-payroll .event-stage { background-color: #5a9a71; }
 .event-market .event-stage { background-color: #5f77b8; }
 .event-ending .event-stage { background-color: #d29a39; }
+.event-development .event-stage { background-color: #3f8a9b; }
+.event-fanmail .event-stage { background-color: #d87893; }
+.event-office .event-stage { background-color: #4c8e62; }
 
 .event-burst {
   position: absolute;
@@ -2287,6 +2327,17 @@ button {
     padding: 7px 8px;
     border-bottom-width: 3px;
   }
+
+  .news-strip {
+    flex-basis: 24px;
+    gap: 5px;
+    padding: 2px 7px;
+    border-bottom-width: 2px;
+    font-size: 7px;
+  }
+
+  .news-strip b,
+  .news-strip em { font-size: 7px; }
 
   .brand-mark {
     width: 35px;
