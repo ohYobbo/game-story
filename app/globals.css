@@ -922,11 +922,53 @@ button {
 .idle-project button { padding: 10px 14px; }
 
 .contract-progress {
-  padding: 8px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 9px;
+  align-items: center;
+  padding: 7px 9px;
   border: 2px solid #ad9267;
   background: rgba(255,255,255,.45);
-  font-size: 12px;
-  text-align: center;
+}
+
+.contract-progress > div:first-child span,
+.contract-progress > div:first-child em {
+  display: block;
+}
+
+.contract-progress > div:first-child span {
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.contract-progress > div:first-child em {
+  margin-top: 3px;
+  color: #76694f;
+  font-size: 8px;
+  font-style: normal;
+}
+
+.contract-targets {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.contract-targets span {
+  padding: 4px 5px;
+  border: 2px solid #a37250;
+  border-radius: 3px;
+  background: #fff0bd;
+  color: #744631;
+  font-size: 8px;
+  font-weight: 900;
+}
+
+.contract-targets span.done {
+  border-color: #4c8055;
+  background: #cde8ae;
+  color: #31613b;
 }
 
 .console-progress {
@@ -2279,6 +2321,7 @@ button {
 .event-development .event-stage { background-color: #3f8a9b; }
 .event-fanmail .event-stage { background-color: #d87893; }
 .event-office .event-stage { background-color: #4c8e62; }
+.event-contract .event-stage { background-color: #4f89ad; }
 
 .event-burst {
   position: absolute;

@@ -61,6 +61,8 @@ type Project = {
   itemUses?: number;
   eventCount?: number;
   directionPoints?: DirectionPoints;
+  deadlineWeeks?: number;
+  qualityTargets?: Partial<Record<"fun" | "creativity" | "graphics" | "sound", number>>;
 };
 
 type ConsoleSpec = {
@@ -130,7 +132,7 @@ type SaveState = {
 };
 
 type EventData = {
-  kind: "payroll" | "expo" | "awards" | "console" | "market" | "ending" | "development" | "fanmail" | "office";
+  kind: "payroll" | "expo" | "awards" | "console" | "market" | "ending" | "development" | "fanmail" | "office" | "contract";
   title: string;
   headline: string;
   body: string;
@@ -258,10 +260,18 @@ const HIRING_METHODS = [
 ];
 
 const contracts = [
-  { name: "商店网页小游戏", target: 115, reward: 850, note: "限期 9 周" },
-  { name: "动画片特效", target: 185, reward: 1450, note: "限期 12 周" },
-  { name: "掌机移植外包", target: 260, reward: 2350, note: "限期 14 周" },
+  { name: "商店网页小游戏", target: 115, reward: 850, deadline: 9, level: 1, requirements: { fun: 12, creativity: 8 } },
+  { name: "游戏说明书插画", target: 155, reward: 1200, deadline: 10, level: 1, requirements: { graphics: 18, creativity: 10 } },
+  { name: "动画片特效", target: 185, reward: 1450, deadline: 12, level: 2, requirements: { graphics: 22, sound: 12 } },
+  { name: "掌机移植外包", target: 260, reward: 2350, deadline: 14, level: 2, requirements: { fun: 18, graphics: 24, sound: 16 } },
+  { name: "大型游戏引擎", target: 340, reward: 3600, deadline: 13, level: 3, requirements: { fun: 22, creativity: 25, graphics: 22, sound: 18 } },
 ];
+const CONTRACT_QUALITY_LABELS = {
+  fun: "趣味",
+  creativity: "创意",
+  graphics: "画面",
+  sound: "音乐",
+};
 
 const formatCash = (value: number) => `¥${Math.max(0, Math.round(value)).toLocaleString()}千`;
 const formatUsers = (value: number) => value >= 10_000 ? `${Math.round(value / 10_000)}万` : value.toLocaleString();
@@ -604,8 +614,17 @@ export default function Home() {
       const reward = finished.reward ?? 600;
       setCash((value) => value + reward);
       setResearch((value) => value + 4);
+      setReputation((value) => clamp(value + 1, 0, 100));
       setProject(null);
-      announce(`外包完成！获得 ${formatCash(reward)}`);
+      setIndustryNews(`像素工坊按期完成“${finished.name}”，业界评价稳步提升。`);
+      setEventData({
+        kind: "contract",
+        title: "委托交付",
+        headline: "客户非常满意！",
+        body: `“${finished.name}”在约定期限内完成，所有品质指标均已通过验收。`,
+        reward: `报酬 ${formatCash(reward)} · 研究 +4 · 业界口碑 +1`,
+      });
+      setModal("event");
       return;
     }
 
@@ -1033,10 +1052,30 @@ export default function Home() {
             graphics: current.graphics + qualityGain * (0.65 + Math.random()),
             sound: current.sound + qualityGain * (0.55 + Math.random()),
             bugs: current.bugs + (current.direction === "赶工" ? Math.random() * 0.8 : Math.random() * 0.35),
+            elapsedWeeks: (current.elapsedWeeks ?? 0) + (isNewWeek ? 1 : 0),
           };
-          if (next.progress >= next.target) {
+          const qualityTargets = current.qualityTargets ?? {};
+          const qualityMet = Object.entries(qualityTargets).every(([key, value]) =>
+            next[key as keyof Pick<Project, "fun" | "creativity" | "graphics" | "sound">] >= (value ?? 0),
+          );
+          if (next.progress >= next.target && qualityMet) {
             window.setTimeout(() => finishProject(next), 80);
             return { ...next, progress: next.target };
+          }
+          if (current.kind === "contract" && isNewWeek && next.elapsedWeeks >= (current.deadlineWeeks ?? 12)) {
+            window.setTimeout(() => {
+              setReputation((value) => clamp(value - 5, 0, 100));
+              setIndustryNews(`“${current.name}”未能按期交付，工作室的业界口碑受损。`);
+              setEventData({
+                kind: "contract",
+                title: "委托超时",
+                headline: "客户取消了委托……",
+                body: `“${current.name}”没有在 ${current.deadlineWeeks ?? 12} 周内达到全部品质指标，团队无法获得任何报酬。`,
+                reward: "报酬 ¥0千 · 业界口碑 -5",
+              });
+              setModal("event");
+            }, 80);
+            return null;
           }
           return next;
         });
@@ -1195,6 +1234,7 @@ export default function Home() {
 
   const startContract = (contract: (typeof contracts)[number]) => {
     if (project) return announce("手头已有项目");
+    if (companyLevel < contract.level) return announce(`搬入第 ${contract.level} 阶段办公室后解锁`);
     setProject({
       kind: "contract",
       name: contract.name,
@@ -1211,6 +1251,9 @@ export default function Home() {
       bugs: 0,
       hype: 0,
       reward: contract.reward,
+      elapsedWeeks: 0,
+      deadlineWeeks: contract.deadline,
+      qualityTargets: contract.requirements,
     });
     closeModal();
     announce("收到委托，开工！");
@@ -1561,7 +1604,22 @@ export default function Home() {
                   <em>{project.consoleSpec?.cpu ?? "定制芯片"} · {project.consoleSpec?.media ?? "专用媒体"} · 投入 {formatCash(project.consoleSpec?.cost ?? 12_000)}</em>
                 </div>
               ) : (
-                <div className="contract-progress">完成委托可获得 <b>{formatCash(project.reward ?? 0)}</b> 与研究点</div>
+                <div className="contract-progress">
+                  <div>
+                    <span>剩余期限 <b>{Math.max(0, (project.deadlineWeeks ?? 12) - (project.elapsedWeeks ?? 0))} 周</b></span>
+                    <em>完成后获得 {formatCash(project.reward ?? 0)} 与研究点</em>
+                  </div>
+                  <div className="contract-targets">
+                    {Object.entries(project.qualityTargets ?? {}).map(([key, target]) => {
+                      const current = project[key as keyof Pick<Project, "fun" | "creativity" | "graphics" | "sound">] as number;
+                      return (
+                        <span key={key} className={current >= (target ?? 0) ? "done" : ""}>
+                          {CONTRACT_QUALITY_LABELS[key as keyof typeof CONTRACT_QUALITY_LABELS]} {Math.min(Math.round(current), target ?? 0)}/{target}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
               )}
             </>
           ) : (
@@ -1729,9 +1787,16 @@ export default function Home() {
             <p className="modal-intro">没有制作新作时，可以用外包赚取资金和研究点。</p>
             <div className="list-cards">
               {contracts.map((contract) => (
-                <button key={contract.name} onClick={() => startContract(contract)} disabled={Boolean(project)}>
+                <button key={contract.name} onClick={() => startContract(contract)} disabled={Boolean(project) || companyLevel < contract.level}>
                   <span className="list-icon contract-icon">W</span>
-                  <span><b>{contract.name}</b><small>{contract.note} · 难度 {Math.round(contract.target / 60)}</small></span>
+                  <span>
+                    <b>{contract.name}</b>
+                    <small>
+                      {companyLevel < contract.level
+                        ? `第 ${contract.level} 阶段办公室解锁`
+                        : `限期 ${contract.deadline} 周 · ${Object.entries(contract.requirements).map(([key, value]) => `${CONTRACT_QUALITY_LABELS[key as keyof typeof CONTRACT_QUALITY_LABELS]} ${value}`).join(" · ")}`}
+                    </small>
+                  </span>
                   <strong>{formatCash(contract.reward)}</strong>
                 </button>
               ))}
