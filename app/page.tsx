@@ -19,6 +19,8 @@ type Staff = {
 
 type ProductionStage = "planning" | "coding" | "graphics" | "sound" | "debug";
 
+type WorkerBehavior = "idle" | "planning" | "coding" | "drawing" | "mixing" | "debugging" | "sipping" | "tired";
+
 type DirectionKey = "cuteness" | "realism" | "approachability" | "niche" | "simplicity" | "innovation" | "gameWorld" | "polish";
 type DirectionPoints = Record<DirectionKey, number>;
 
@@ -149,11 +151,11 @@ const INITIAL_STAFF: Staff[] = [
 ];
 
 const PLATFORMS = [
-  { name: "个人电脑", cost: 300, users: 280_000, debut: 1, retire: 99, tone: "#91c46c" },
-  { name: "豆豆机", cost: 650, users: 740_000, debut: 1, retire: 5, tone: "#efca55" },
-  { name: "迷你掌机", cost: 1100, users: 1_260_000, debut: 2, retire: 8, tone: "#71add1" },
-  { name: "星球盒", cost: 1750, users: 1_720_000, debut: 4, retire: 11, tone: "#a68ad4" },
-  { name: "幻彩 32", cost: 2400, users: 2_350_000, debut: 6, retire: 99, tone: "#e67c5c" },
+  { name: "个人电脑", cost: 300, users: 280_000, debut: 1, retire: 99 },
+  { name: "豆豆机", cost: 650, users: 740_000, debut: 1, retire: 5 },
+  { name: "迷你掌机", cost: 1100, users: 1_260_000, debut: 2, retire: 8 },
+  { name: "星球盒", cost: 1750, users: 1_720_000, debut: 4, retire: 11 },
+  { name: "幻彩 32", cost: 2400, users: 2_350_000, debut: 6, retire: 99 },
 ];
 const GENRES = ["动作", "角色扮演", "模拟", "冒险", "益智"];
 const THEMES = ["幻想", "忍者", "侦探", "小镇", "机器人"];
@@ -242,12 +244,12 @@ const INITIAL_INVENTORY: Inventory = {
 };
 
 const SHOP_ITEMS = [
-  { key: "funBoost" as const, name: "趣味提升书", note: "开发中增加趣味", cost: 620, icon: "F" },
-  { key: "creativityBoost" as const, name: "创意提升书", note: "开发中增加创意", cost: 620, icon: "I" },
-  { key: "graphicsBoost" as const, name: "画面提升书", note: "开发中增加画面", cost: 620, icon: "G" },
-  { key: "soundBoost" as const, name: "音乐提升书", note: "开发中增加音乐", cost: 620, icon: "S" },
-  { key: "bugSpray" as const, name: "漏洞喷雾", note: "立即移除部分漏洞", cost: 480, icon: "!" },
-  { key: "energyDrink" as const, name: "活力汽水", note: "恢复全员体力", cost: 360, icon: "E" },
+  { key: "funBoost" as const, name: "趣味提升书", note: "开发中增加趣味", cost: 620, iconIndex: 10 },
+  { key: "creativityBoost" as const, name: "创意提升书", note: "开发中增加创意", cost: 620, iconIndex: 11 },
+  { key: "graphicsBoost" as const, name: "画面提升书", note: "开发中增加画面", cost: 620, iconIndex: 12 },
+  { key: "soundBoost" as const, name: "音乐提升书", note: "开发中增加音乐", cost: 620, iconIndex: 13 },
+  { key: "bugSpray" as const, name: "漏洞喷雾", note: "立即移除部分漏洞", cost: 480, iconIndex: 14 },
+  { key: "energyDrink" as const, name: "活力汽水", note: "恢复全员体力", cost: 360, iconIndex: 15 },
 ];
 
 const HIRING_METHODS = [
@@ -349,50 +351,147 @@ function loadSave(): SaveState | null {
   }
 }
 
-function PixelPerson({ staff, working }: { staff: Staff; working: boolean }) {
+const WORKER_BEHAVIORS: Record<WorkerBehavior, { label: string; iconIndex: number }> = {
+  idle: { label: "等待灵感", iconIndex: 6 },
+  planning: { label: "企划构思", iconIndex: 6 },
+  coding: { label: "编写程序", iconIndex: 0 },
+  drawing: { label: "绘制美术", iconIndex: 7 },
+  mixing: { label: "制作音乐", iconIndex: 8 },
+  debugging: { label: "排查漏洞", iconIndex: 9 },
+  sipping: { label: "补充能量", iconIndex: 15 },
+  tired: { label: "疲惫休息", iconIndex: 23 },
+};
+
+const WORKER_BEHAVIOR_ROWS: Record<Exclude<WorkerBehavior, "sipping">, number> = {
+  idle: 0,
+  planning: 1,
+  coding: 2,
+  drawing: 3,
+  mixing: 4,
+  debugging: 5,
+  tired: 6,
+};
+
+const EVENT_ICON_INDEX: Record<EventData["kind"], number> = {
+  payroll: 22,
+  expo: 3,
+  awards: 20,
+  console: 21,
+  market: 4,
+  ending: 20,
+  development: 0,
+  fanmail: 23,
+  office: 2,
+  contract: 1,
+};
+
+const atlasPosition = (index: number, count: number) => `${index / Math.max(1, count - 1) * 100}%`;
+
+function getCharacterColumn(staff: Staff) {
+  if (staff.role.includes("美术")) return 1;
+  if (staff.role.includes("音") || staff.role.includes("作曲")) return 2;
+  if (staff.role.includes("程序") || staff.role.includes("工程")) return 0;
+  return 3;
+}
+
+function UiIcon({ index, className = "" }: { index: number; className?: string }) {
+  const column = index % 5;
+  const row = Math.floor(index / 5);
   return (
-    <div className={`worker ${working ? "is-working" : ""}`} aria-label={`${staff.name}，${staff.role}`}>
-      <div className="work-puff">{working ? `+${Math.max(1, Math.round((staff.code + staff.art + staff.sound) / 16))}` : "Z"}</div>
-      <div className="person">
-        <i className="hair" />
-        <i className="face" />
-        <i className="body" style={{ "--shirt": staff.color } as React.CSSProperties} />
-        <i className="arm" />
-      </div>
+    <span
+      className={`ui-icon ${className}`}
+      style={{ "--icon-x": atlasPosition(column, 5), "--icon-y": atlasPosition(row, 5) } as React.CSSProperties}
+      aria-hidden="true"
+    />
+  );
+}
+
+function StaffAvatar({ staff, className = "" }: { staff: Staff; className?: string }) {
+  const column = getCharacterColumn(staff);
+  return (
+    <span
+      className={`staff-sprite-avatar ${className}`}
+      style={{ "--sprite-x": atlasPosition(column, 4) } as React.CSSProperties}
+      aria-hidden="true"
+    />
+  );
+}
+
+function getWorkerBehavior(staff: Staff, project: Project | null, index: number): WorkerBehavior {
+  if (staff.energy < 25) return "tired";
+  if (!project) return (["planning", "sipping", "idle", "idle"] as WorkerBehavior[])[index % 4];
+  if (project.kind === "game" && project.stage === "debug") return "debugging";
+  if (staff.role.includes("美术")) return "drawing";
+  if (staff.role.includes("音") || staff.role.includes("作曲")) return "mixing";
+  if (staff.role.includes("编剧") || staff.role.includes("制作人")) return "planning";
+  return project.kind === "console" && index % 3 === 2 ? "debugging" : "coding";
+}
+
+function PixelPerson({ staff, behavior }: { staff: Staff; behavior: WorkerBehavior }) {
+  const action = WORKER_BEHAVIORS[behavior];
+  const working = !["idle", "sipping", "tired"].includes(behavior);
+  const column = getCharacterColumn(staff);
+  const spriteStyle = behavior === "sipping"
+    ? {
+        "--sprite-x": atlasPosition(column % 2, 2),
+        "--sprite-y": atlasPosition(Math.floor(column / 2), 2),
+      }
+    : {
+        "--sprite-x": atlasPosition(column, 4),
+        "--sprite-y": atlasPosition(WORKER_BEHAVIOR_ROWS[behavior], 7),
+      };
+
+  return (
+    <div
+      className={`worker behavior-${behavior} ${working ? "is-working" : "is-resting"}`}
+      style={{ "--worker-delay": `${-(staff.id % 4) * .24}s` } as React.CSSProperties}
+      aria-label={`${staff.name}，${staff.role}，正在${action.label}`}
+    >
+      <div className="work-puff"><UiIcon index={action.iconIndex} /></div>
+      <div
+        className={`person-sprite ${behavior === "sipping" ? "uses-sipping-atlas" : ""}`}
+        style={spriteStyle as React.CSSProperties}
+        aria-hidden="true"
+      />
       <div className="chair" />
       <div className="desk">
         <i className="monitor" />
         <i className="keyboard" />
         <i className="mug" />
       </div>
-      <span className="name-tag">{staff.name}</span>
-    </div>
-  );
-}
-
-function WindowView() {
-  return (
-    <div className="office-window" aria-hidden="true">
-      <div className="sky">
-        <i className="cloud c1" />
-        <i className="cloud c2" />
-        <i className="sun" />
-      </div>
-      <div className="city">
-        <i /><i /><i /><i /><i />
-      </div>
-      <div className="window-bar" />
+      <span className="name-tag"><b>{staff.name}</b><small>{action.label}</small></span>
     </div>
   );
 }
 
 function ModalShell({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  useEffect(() => {
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    closeButtonRef.current?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      onCloseRef.current();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      previousFocus?.focus();
+    };
+  }, []);
+
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <section className="pixel-modal" role="dialog" aria-modal="true" aria-label={title}>
         <header className="modal-title">
           <span>{title}</span>
-          <button className="close-button" onClick={onClose} aria-label="关闭">×</button>
+          <button ref={closeButtonRef} className="close-button" onClick={onClose} aria-label="关闭">×</button>
         </header>
         <div className="modal-body">{children}</div>
       </section>
@@ -521,7 +620,6 @@ export default function Home() {
         users: Math.max(220_000, consoleUsers),
         debut: year,
         retire: 99,
-        tone: "#f07355",
       });
     }
     return market;
@@ -1516,7 +1614,7 @@ export default function Home() {
       <div className="game-shell">
         <header className="top-hud">
           <div className="studio-brand">
-            <span className="brand-mark">P</span>
+            <UiIcon index={0} className="brand-mark" />
             <div><b>像素工坊</b><small>PIXEL STUDIO</small></div>
           </div>
           <div className="date-card">
@@ -1529,27 +1627,22 @@ export default function Home() {
           </div>
         </header>
 
-        <section className="office" aria-label="像素工作室办公室">
-          <WindowView />
-          <div className="wall-logo">PIXEL<br /><b>STUDIO</b></div>
-          <div className="wall-clock"><i /></div>
-          <div className="plant p-left"><i /><b /></div>
-          <div className="plant p-right"><i /><b /></div>
-          <div className="cabinet"><i /><i /><i /></div>
-          <div className="water-cooler"><i /><b /></div>
-          <div className="office-floor" />
+        <section className={`office office-level-${companyLevel}`} aria-label={`像素工作室第 ${companyLevel} 阶段办公室`}>
+          <div className="office-light" aria-hidden="true" />
           <div className={`workers count-${staff.length}`}>
-            {staff.map((member) => <PixelPerson key={member.id} staff={member} working={Boolean(project)} />)}
+            {staff.map((member, index) => (
+              <PixelPerson key={member.id} staff={member} behavior={getWorkerBehavior(member, project, index)} />
+            ))}
           </div>
           {!project && (
             <div className="secretary-tip">
-              <i className="secretary-face" />
+              <UiIcon index={2} className="secretary-face" />
               <span>社长，接下来要做什么？</span>
             </div>
           )}
           <div className="floating-stats">
-            <span>♥ 粉丝 {fans.toLocaleString()}</span>
-            <span>◆ 研究 {research}</span>
+            <span><UiIcon index={23} />粉丝 {fans.toLocaleString()}</span>
+            <span><UiIcon index={24} />研究 {research}</span>
           </div>
         </section>
 
@@ -1583,11 +1676,11 @@ export default function Home() {
                     })}
                   </div>
                   <div className="quality-grid">
-                    <span><i className="q-fun">F</i>趣味 <b>{Math.round(project.fun)}</b></span>
-                    <span><i className="q-idea">I</i>创意 <b>{Math.round(project.creativity)}</b></span>
-                    <span><i className="q-art">G</i>画面 <b>{Math.round(project.graphics)}</b></span>
-                    <span><i className="q-snd">S</i>音乐 <b>{Math.round(project.sound)}</b></span>
-                    <span><i className="q-bug">!</i>漏洞 <b>{Math.round(project.bugs)}</b></span>
+                    <span><UiIcon index={5} />趣味 <b>{Math.round(project.fun)}</b></span>
+                    <span><UiIcon index={6} />创意 <b>{Math.round(project.creativity)}</b></span>
+                    <span><UiIcon index={7} />画面 <b>{Math.round(project.graphics)}</b></span>
+                    <span><UiIcon index={8} />音乐 <b>{Math.round(project.sound)}</b></span>
+                    <span><UiIcon index={9} />漏洞 <b>{Math.round(project.bugs)}</b></span>
                   </div>
                   {project.stage === "debug" && (
                     <div className="debug-strip">
@@ -1624,7 +1717,7 @@ export default function Home() {
             </>
           ) : (
             <div className="idle-project">
-              <div className="idle-icon">!</div>
+              <UiIcon index={0} className="idle-icon" />
               <div><strong>当前没有项目</strong><small>点击“开发”制作你的下一款游戏</small></div>
               <button onClick={() => openMenu("develop")}>开始企划</button>
             </div>
@@ -1632,11 +1725,11 @@ export default function Home() {
         </section>
 
         <nav className="bottom-menu" aria-label="经营菜单">
-          <button onClick={() => openMenu("develop")}><i>✦</i><span>开发</span></button>
-          <button onClick={() => openMenu("contracts")}><i>▤</i><span>外包</span></button>
-          <button onClick={() => openMenu("staff")}><i>♟</i><span>员工</span></button>
-          <button onClick={() => openMenu("marketing")}><i>◆</i><span>宣传</span></button>
-          <button onClick={() => openMenu("records")}><i>▦</i><span>资料</span></button>
+          <button className={modal === "develop" ? "is-active" : ""} aria-pressed={modal === "develop"} onClick={() => openMenu("develop")}><UiIcon index={0} /><span>开发</span></button>
+          <button className={modal === "contracts" ? "is-active" : ""} aria-pressed={modal === "contracts"} onClick={() => openMenu("contracts")}><UiIcon index={1} /><span>外包</span></button>
+          <button className={["staff", "training", "career", "hire", "shop"].includes(modal ?? "") ? "is-active" : ""} aria-pressed={["staff", "training", "career", "hire", "shop"].includes(modal ?? "")} onClick={() => openMenu("staff")}><UiIcon index={2} /><span>员工</span></button>
+          <button className={["marketing", "items"].includes(modal ?? "") ? "is-active" : ""} aria-pressed={["marketing", "items"].includes(modal ?? "")} onClick={() => openMenu("marketing")}><UiIcon index={3} /><span>宣传</span></button>
+          <button className={modal === "records" ? "is-active" : ""} aria-pressed={modal === "records"} onClick={() => openMenu("records")}><UiIcon index={4} /><span>资料</span></button>
         </nav>
 
         <div className="utility-row">
@@ -1655,7 +1748,7 @@ export default function Home() {
             ) : (
               <div className="develop-form">
                 <div className={`hardware-card ${ownConsole ? "is-complete" : ""}`}>
-                  <span className="hardware-icon"><i /><b /></span>
+                  <UiIcon index={21} className="hardware-icon" />
                   <span>
                     <b>{ownConsole ? "自研主机：像素盒子" : "自研主机计划"}</b>
                     <small>
@@ -1693,7 +1786,7 @@ export default function Home() {
                 <div className="platform-grid">
                   {availablePlatforms.map((item) => (
                     <button key={item.name} className={selectedPlatform === item.name ? "selected" : ""} onClick={() => setSelectedPlatform(item.name)}>
-                      <i style={{ "--platform": item.tone } as React.CSSProperties} />
+                      <UiIcon index={21} className="platform-icon" />
                       <b>{item.name}</b><small>用户 {formatUsers(item.users)}</small><em>{formatCash(item.cost)}</em>
                     </button>
                   ))}
@@ -1767,14 +1860,14 @@ export default function Home() {
                 const skill = member[skillKey];
                 return (
                   <button key={member.id} onClick={() => assignStageLead(member)}>
-                    <span className="mini-avatar" style={{ "--shirt": member.color } as React.CSSProperties}><i /></span>
+                    <StaffAvatar staff={member} className="mini-avatar" />
                     <span><b>{member.name}</b><small>{member.role} · 体力 {Math.round(member.energy)}%</small></span>
                     <strong>{skillKey === "code" ? "程序" : skillKey === "scenario" ? "剧本" : skillKey === "art" ? "画面" : "音乐"} {skill}</strong>
                   </button>
                 );
               })}
               <button className="external-lead" onClick={hireExternalLead}>
-                <span className="external-star">★</span>
+                <UiIcon index={20} className="external-star" />
                 <span><b>邀请外聘名人</b><small>能力出众，不消耗员工体力</small></span>
                 <strong>{formatCash(900 + STAGE_ORDER.indexOf(project.stage ?? "planning") * 350)}</strong>
               </button>
@@ -1788,7 +1881,7 @@ export default function Home() {
             <div className="list-cards">
               {contracts.map((contract) => (
                 <button key={contract.name} onClick={() => startContract(contract)} disabled={Boolean(project) || companyLevel < contract.level}>
-                  <span className="list-icon contract-icon">W</span>
+                  <UiIcon index={1} className="list-icon contract-icon" />
                   <span>
                     <b>{contract.name}</b>
                     <small>
@@ -1813,7 +1906,7 @@ export default function Home() {
             <div className="staff-list">
               {staff.map((member) => (
                 <article key={member.id}>
-                  <div className="mini-avatar" style={{ "--shirt": member.color } as React.CSSProperties}><i /></div>
+                  <StaffAvatar staff={member} className="mini-avatar" />
                   <div className="staff-info"><b>{member.name}<em>Lv.{member.level}</em></b><small>{member.role} · 体力 {Math.round(member.energy)}%</small><div><span>程 {member.code}</span><span>剧 {member.scenario}</span><span>画 {member.art}</span><span>音 {member.sound}</span></div></div>
                   <div className="staff-actions">
                     <button onClick={() => levelUp(member.id)}>升级<small>◆{5 + member.level * 4}</small></button>
@@ -1834,7 +1927,7 @@ export default function Home() {
         {modal === "training" && selectedStaff && (
           <ModalShell title={`培训 · ${selectedStaff.name}`} onClose={() => setModal("staff")}>
             <div className="training-hero">
-              <span className="mini-avatar" style={{ "--shirt": selectedStaff.color } as React.CSSProperties}><i /></span>
+              <StaffAvatar staff={selectedStaff} className="mini-avatar" />
               <span><b>{selectedStaff.role} Lv.{selectedStaff.level}</b><small>体力 {Math.round(selectedStaff.energy)}% · 重复训练效果会逐渐降低</small></span>
             </div>
             <div className="training-list">
@@ -1842,7 +1935,7 @@ export default function Home() {
                 const used = selectedStaff.training?.[method.id] ?? 0;
                 return (
                   <button key={method.id} onClick={() => runTraining(method)}>
-                    <span className="training-icon">{method.id === "reading" ? "B" : method.id === "movie" ? "F" : method.id === "marathon" ? "R" : "P"}</span>
+                    <UiIcon index={18} className="training-icon" />
                     <span><b>{method.name}</b><small>{method.note} · 体力 -{method.energy} · 已训练 {used} 次</small></span>
                     <strong>{formatCash(method.cost)}</strong>
                   </button>
@@ -1856,7 +1949,7 @@ export default function Home() {
           <ModalShell title={`转职 · ${selectedStaff.name}`} onClose={() => setModal("staff")}>
             <div className="career-sheet">
               <div className="career-current">
-                <span className="mini-avatar" style={{ "--shirt": selectedStaff.color } as React.CSSProperties}><i /></span>
+                <StaffAvatar staff={selectedStaff} className="mini-avatar" />
                 <span><b>{selectedStaff.role} Lv.{selectedStaff.level}</b><small>已精通：{selectedStaff.masteredRoles?.join("、") || "暂无"}</small></span>
                 <em>手册 {careerManuals}</em>
               </div>
@@ -1871,16 +1964,16 @@ export default function Home() {
         {modal === "shop" && (
           <ModalShell title="旅行商人 · 南瓜商会" onClose={() => setModal("staff")}>
             <div className="merchant-banner">
-              <span className="merchant-face">P</span>
+              <UiIcon index={22} className="merchant-face" />
               <span><b>{year < 2 ? "第 2 年再来吧！" : "每年限购 3 件商品"}</b><small>本年已购 {merchantYear === year ? merchantPurchases : 0}/3 · 道具可在宣传菜单的道具箱使用</small></span>
             </div>
             <div className="shop-grid">
               <button onClick={buyCareerManual} disabled={year < 2 || (merchantYear === year && merchantPurchases >= 3)}>
-                <span className="shop-icon manual">C</span><span><b>转职手册</b><small>让 Lv.5 员工转换职业</small></span><strong>{formatCash(1400)}</strong>
+                <UiIcon index={16} className="shop-icon manual" /><span><b>转职手册</b><small>让 Lv.5 员工转换职业</small></span><strong>{formatCash(1400)}</strong>
               </button>
               {SHOP_ITEMS.map((item) => (
                 <button key={item.key} onClick={() => buyShopItem(item)} disabled={year < 2 || (merchantYear === year && merchantPurchases >= 3)}>
-                  <span className="shop-icon">{item.icon}</span><span><b>{item.name}</b><small>{item.note}</small></span><strong>{formatCash(item.cost)}</strong>
+                  <UiIcon index={item.iconIndex} className="shop-icon" /><span><b>{item.name}</b><small>{item.note}</small></span><strong>{formatCash(item.cost)}</strong>
                 </button>
               ))}
             </div>
@@ -1893,7 +1986,7 @@ export default function Home() {
             <div className="shop-grid inventory-grid">
               {SHOP_ITEMS.map((item) => (
                 <button key={item.key} onClick={() => useItem(item.key)} disabled={inventory[item.key] < 1}>
-                  <span className="shop-icon">{item.icon}</span><span><b>{item.name}</b><small>{item.note}</small></span><strong>持有 {inventory[item.key]}</strong>
+                  <UiIcon index={item.iconIndex} className="shop-icon" /><span><b>{item.name}</b><small>{item.note}</small></span><strong>持有 {inventory[item.key]}</strong>
                 </button>
               ))}
             </div>
@@ -1906,7 +1999,7 @@ export default function Home() {
             <div className="hiring-list">
               {HIRING_METHODS.filter((method) => !method.level || companyLevel >= method.level).map((method) => (
                 <button key={method.name} onClick={() => hireWithMethod(method)}>
-                  <span className="hire-rank">{"★".repeat(Math.max(1, method.quality + 1))}</span>
+                  <span className="hire-rank"><UiIcon index={17} /><small>{"★".repeat(Math.max(1, method.quality + 1))}</small></span>
                   <span><b>{method.name}</b><small>{method.note}</small></span>
                   <strong>{formatCash(method.cost)}</strong>
                 </button>
@@ -1923,12 +2016,12 @@ export default function Home() {
             </div>
             <div className="list-cards marketing-list">
               {[
-                { name: "街头传单", note: "吸引年轻玩家", cost: 220, hype: 4, icon: "P", segment: "teens" as const },
-                { name: "游戏杂志广告", note: "覆盖成人核心玩家", cost: 850, hype: 12, icon: "M", segment: "adults" as const },
-                { name: "电视黄金广告", note: "打入家庭与儿童市场", cost: 2600, hype: 32, icon: "TV", segment: "kids" as const },
+                { name: "街头传单", note: "吸引年轻玩家", cost: 220, hype: 4, segment: "teens" as const },
+                { name: "游戏杂志广告", note: "覆盖成人核心玩家", cost: 850, hype: 12, segment: "adults" as const },
+                { name: "电视黄金广告", note: "打入家庭与儿童市场", cost: 2600, hype: 32, segment: "kids" as const },
               ].map((item) => (
                 <button key={item.name} onClick={() => advertise(item.cost, item.hype, item.name, item.segment)}>
-                  <span className="list-icon ad-icon">{item.icon}</span>
+                  <UiIcon index={3} className="list-icon ad-icon" />
                   <span><b>{item.name}</b><small>{item.note} · 热度 +{item.hype}</small></span>
                   <strong>{formatCash(item.cost)}</strong>
                 </button>
@@ -1948,7 +2041,7 @@ export default function Home() {
               <div><small>业界口碑</small><b>{reputation}</b></div>
             </div>
             <div className="console-record">
-              <span className={`console-dot ${ownConsole ? "online" : ""}`} />
+              <UiIcon index={21} className={`console-record-icon ${ownConsole ? "online" : ""}`} />
               <span><b>{ownConsole ? "像素盒子" : "尚未推出自研主机"}</b><small>{ownConsole ? `平台用户 ${formatUsers(consoleUsers)}` : "扩建并积累作品后可启动硬件研发"}</small></span>
             </div>
             {endingShown && <div className="ending-record"><b>20 年经营分数</b><strong>{endingScore.toLocaleString()}</strong><small>结算后仍可继续挑战更高纪录</small></div>}
@@ -1990,7 +2083,7 @@ export default function Home() {
             <div className={`event-sheet event-${eventData.kind}`}>
               <div className="event-stage">
                 <span className="event-burst">★</span>
-                <div className="event-trophy"><i /><b /></div>
+                <UiIcon index={EVENT_ICON_INDEX[eventData.kind]} className="event-trophy" />
                 <span className="event-confetti c-a">◆</span>
                 <span className="event-confetti c-b">●</span>
                 <span className="event-confetti c-c">■</span>
