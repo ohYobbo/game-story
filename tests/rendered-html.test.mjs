@@ -107,7 +107,13 @@ test("server-renders the finished game interface", async () => {
 test("wires the complete generated pixel-art system into the product", async () => {
   const [
     page,
+    dashboard,
+    modals,
+    pixelUi,
     css,
+    dashboardCss,
+    modalsCss,
+    responsiveCss,
     layout,
     background,
     socialCard,
@@ -119,7 +125,13 @@ test("wires the complete generated pixel-art system into the product", async () 
     panelTexture,
   ] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/components/game-dashboard.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/components/game-modals.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/components/pixel-ui.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+    readFile(new URL("../app/styles/dashboard.css", import.meta.url), "utf8"),
+    readFile(new URL("../app/styles/modals.css", import.meta.url), "utf8"),
+    readFile(new URL("../app/styles/responsive.css", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     stat(new URL("../public/pixel-studio-night-bg.png", import.meta.url)),
     stat(new URL("../public/og.png", import.meta.url)),
@@ -141,8 +153,11 @@ test("wires the complete generated pixel-art system into the product", async () 
     stat(new URL("../public/game-ui/panel-texture.png", import.meta.url)),
   ]);
 
-  assert.match(page, /type WorkerBehavior =/);
-  assert.match(page, /getWorkerBehavior\(member, project, index\)/);
+  const components = [page, dashboard, modals, pixelUi].join("\n");
+  const styles = [css, dashboardCss, modalsCss, responsiveCss].join("\n");
+
+  assert.match(components, /WorkerBehavior/);
+  assert.match(components, /getWorkerBehavior\(member, project, index\)/);
   for (const behavior of [
     "idle",
     "planning",
@@ -153,7 +168,7 @@ test("wires the complete generated pixel-art system into the product", async () 
     "sipping",
     "tired",
   ]) {
-    assert.match(css, new RegExp("\\.behavior-" + behavior));
+    assert.match(styles, new RegExp("\\.behavior-" + behavior));
   }
   for (const modal of [
     "develop",
@@ -171,33 +186,33 @@ test("wires the complete generated pixel-art system into the product", async () 
     "event",
     "review",
   ]) {
-    assert.match(page, new RegExp('modal === "' + modal + '"'));
+    assert.match(components, new RegExp('modal === "' + modal + '"'));
   }
-  assert.equal(page.match(/<ModalShell/g)?.length, 14);
-  assert.match(css, /url\("\/pixel-studio-night-bg\.png"\)/);
-  assert.match(css, /url\("\/game-ui\/office-levels-atlas\.png"\)/);
-  assert.match(css, /url\("\/game-ui\/character-behaviors-atlas\.png"\)/);
-  assert.match(css, /url\("\/game-ui\/character-sipping-atlas\.png"\)/);
-  assert.match(css, /url\("\/game-ui\/ui-icons-atlas\.png"\)/);
-  assert.match(css, /url\("\/game-ui\/panel-texture\.png"\)/);
-  assert.match(css, /background-size:\s*100% 100%, 100% 300%/);
+  assert.equal(components.match(/<ModalShell/g)?.length, 14);
+  assert.match(styles, /url\("\/pixel-studio-night-bg\.png"\)/);
+  assert.match(styles, /url\("\/game-ui\/office-levels-atlas\.png"\)/);
+  assert.match(styles, /url\("\/game-ui\/character-behaviors-atlas\.png"\)/);
+  assert.match(styles, /url\("\/game-ui\/character-sipping-atlas\.png"\)/);
+  assert.match(styles, /url\("\/game-ui\/ui-icons-atlas\.png"\)/);
+  assert.match(styles, /url\("\/game-ui\/panel-texture\.png"\)/);
+  assert.match(styles, /background-size:\s*100% 100%, 100% 300%/);
   assert.match(
-    css,
+    styles,
     /\.pixel-modal[\s\S]*url\("\/game-ui\/panel-texture\.png"\)/,
   );
   assert.match(
-    page,
+    components,
     /className=\{.office office-level-\$\{companyLevel\}.\}/,
   );
-  assert.match(page, /function UiIcon/);
-  assert.match(page, /function StaffAvatar/);
-  assert.match(page, /event\.key !== "Escape"/);
-  assert.match(page, /previousFocus\?\.focus\(\)/);
-  assert.match(css, /prefers-reduced-motion:\s*reduce/);
+  assert.match(components, /function UiIcon/);
+  assert.match(components, /function StaffAvatar/);
+  assert.match(components, /event\.key !== "Escape"/);
+  assert.match(components, /previousFocus\?\.focus\(\)/);
+  assert.match(styles, /prefers-reduced-motion:\s*reduce/);
   assert.match(layout, /\/og\.png/);
   assert.match(layout, /\/favicon\.png/);
   assert.doesNotMatch(
-    page + "\n" + css + "\n" + layout,
+    components + "\n" + styles + "\n" + layout,
     /window\.svg|globe\.svg|file\.svg/,
   );
   for (const asset of [

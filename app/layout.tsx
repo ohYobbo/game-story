@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import "./globals.css";
+import "./styles/dashboard.css";
+import "./styles/modals.css";
+import "./styles/responsive.css";
 
 const title = "像素工坊 — 游戏公司经营物语";
 const description = "从四人小作坊到百万销量工作室，制作属于你的像素游戏传奇。";

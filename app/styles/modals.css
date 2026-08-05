@@ -1,0 +1,342 @@
+
+.pixel-modal {
+  border: 6px solid var(--pixel-line);
+  border-radius: 3px;
+  background: var(--cream);
+  box-shadow:
+    0 0 0 3px #d5963b,
+    0 0 0 7px #123b5c,
+    12px 14px rgba(0, 5, 15, .62);
+}
+
+.modal-title {
+  min-height: 50px;
+  border-bottom: 4px solid var(--pixel-line);
+  background:
+    linear-gradient(rgba(255,255,255,.1) 50%, transparent 50%) 0 0 / 100% 4px,
+    linear-gradient(90deg, #a63e23, #df6d31 52%, #9f371f);
+  color: var(--cream);
+  font-size: 16px;
+  letter-spacing: 1px;
+  text-shadow: 2px 2px #642417;
+}
+
+.close-button {
+  border: 3px solid #4d1c18;
+  border-radius: 2px;
+  background: #f0b246;
+  box-shadow: inset 0 2px #ffe59a, 2px 2px #5d2118;
+  color: var(--navy);
+  text-shadow: none;
+}
+
+.modal-body {
+  background:
+    linear-gradient(rgba(255,255,255,.14), rgba(255,239,190,.04)),
+    url("/game-ui/panel-texture.png") center / 220px 220px repeat;
+  image-rendering: pixelated;
+}
+
+.pixel-modal small,
+.pixel-modal .modal-intro { color: #62543d; }
+
+.hardware-card,
+.sequel-picker,
+.direction-axis,
+.stage-brief,
+.lead-grid > button,
+.list-cards > button,
+.staff-list article,
+.training-hero,
+.career-current,
+.training-list button,
+.career-sheet > p,
+.career-options button,
+.merchant-banner,
+.shop-grid > button,
+.hiring-list > button,
+.record-stats div,
+.console-record,
+.ending-record,
+.fan-segments,
+.knowledge-panel > div,
+.sales-result span,
+.expo-options button,
+.console-spec-summary span,
+.contract-progress,
+.notice-card,
+.modal-intro {
+  border: 3px solid var(--pixel-line);
+  border-radius: 2px;
+  background:
+    linear-gradient(rgba(255,255,255,.18), rgba(245,213,139,.08)),
+    url("/game-ui/panel-texture.png") center / 180px 180px repeat;
+  box-shadow: inset 0 2px rgba(255,255,255,.5), 3px 3px #7d5934;
+  color: var(--navy);
+  image-rendering: pixelated;
+}
+
+.hardware-card > span:nth-child(2) b { color: var(--navy); }
+.hardware-card > span:nth-child(2) small { color: #62543d; }
+
+.staff-info div span {
+  border: 2px solid #071426;
+  border-radius: 1px;
+  background: #0d3656;
+  box-shadow: inset 0 2px #1b6683;
+  color: #dcece8;
+}
+
+.career-current em { color: #a13d22; }
+
+.lead-grid > button:hover,
+.list-cards > button:hover,
+.training-list button:hover,
+.shop-grid > button:hover,
+.hiring-list > button:hover,
+.career-options button:hover {
+  border-color: #b34c28;
+  background-color: #ffe5a8;
+  transform: translateY(-1px);
+}
+
+.field-label input,
+.field-label select,
+.console-builder select,
+.sequel-picker select {
+  border: 3px solid var(--pixel-line);
+  border-radius: 2px;
+  background: #fff1c3;
+  box-shadow: inset 3px 3px #ddbf7d;
+  color: var(--navy);
+}
+
+.platform-grid button,
+.direction-row button {
+  border: 3px solid var(--pixel-line);
+  border-radius: 2px;
+  background: #f5d996;
+  box-shadow: inset 0 3px #fff0bd, 3px 3px #76502f;
+}
+.platform-grid button.selected,
+.direction-row button.selected {
+  border-color: #071426;
+  background: #d75f2d;
+  box-shadow: inset 0 3px #ef9d49, 3px 3px #542218;
+  color: #fff2c5;
+}
+.platform-grid button.selected small,
+.direction-row button.selected small { color: #ffe1a4; }
+
+.ui-icon.hardware-icon,
+.ui-icon.platform-icon,
+.ui-icon.external-star,
+.ui-icon.list-icon,
+.ui-icon.training-icon,
+.ui-icon.shop-icon,
+.ui-icon.merchant-face {
+  border: 0;
+  border-radius: 0;
+  background-color: transparent;
+  box-shadow: none;
+  color: transparent;
+  text-shadow: none;
+}
+.ui-icon.hardware-icon { width: 62px; height: 62px; }
+.ui-icon.platform-icon { width: 48px; height: 48px; margin: 0 auto 4px; }
+.ui-icon.external-star { width: 52px; height: 52px; }
+.ui-icon.list-icon { width: 50px; height: 50px; }
+.ui-icon.training-icon,
+.ui-icon.shop-icon { width: 46px; height: 46px; }
+.ui-icon.merchant-face { width: 58px; height: 58px; }
+
+.hire-rank {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  min-height: 52px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #a13d22;
+}
+.hire-rank .ui-icon { width: 42px; height: 42px; }
+.hire-rank small { margin-top: -6px; color: #b24b28; font-size: 7px; text-shadow: 1px 1px #ffe8a8; }
+
+.primary-button,
+.idle-project button,
+.staff-summary button,
+.expand-button,
+.marketing-head > button,
+.debug-strip button {
+  border: 3px solid #4e1e18;
+  border-radius: 2px;
+  background: linear-gradient(#e27334, #ae4124);
+  box-shadow: inset 0 3px #f3ac55, 3px 3px #4a1d17;
+  color: #fff1c1;
+  text-shadow: 1px 1px #6f2719;
+}
+
+.record-hero {
+  border: 4px solid var(--pixel-line);
+  border-radius: 2px;
+  background: linear-gradient(110deg, #0a2644, #124a6a);
+  box-shadow: inset 0 3px #24718b, 4px 4px #6f4a2c;
+  color: #d6e7e4;
+}
+.record-hero b { color: var(--cream); text-shadow: 3px 3px #071426; }
+.record-stats b,
+.console-spec-summary b,
+.sales-result b { color: #0a668e; }
+
+.review-cover {
+  border: 4px solid var(--pixel-line);
+  border-radius: 2px;
+  background:
+    linear-gradient(rgba(255,255,255,.05) 50%, transparent 50%) 0 0 / 100% 4px,
+    linear-gradient(110deg, #071a32, #124c6d);
+  box-shadow: inset 0 3px #287590, 4px 4px #6f4a2c;
+  color: var(--cream);
+}
+
+.review-total,
+.event-reward {
+  border: 3px solid var(--pixel-line);
+  border-radius: 2px;
+  background: #f0b347;
+  box-shadow: inset 0 3px #ffe48b, 3px 3px #6e421f;
+  color: var(--navy);
+}
+
+.event-stage,
+.event-awards .event-stage,
+.event-console .event-stage,
+.event-payroll .event-stage,
+.event-market .event-stage,
+.event-ending .event-stage,
+.event-development .event-stage,
+.event-fanmail .event-stage,
+.event-office .event-stage,
+.event-contract .event-stage {
+  border: 4px solid var(--pixel-line);
+  border-radius: 2px;
+  background:
+    radial-gradient(circle at 50% 35%, rgba(42,184,213,.32), transparent 35%),
+    linear-gradient(135deg, #071a32, #123f61);
+  box-shadow: inset 0 3px #236a85, 4px 4px #6f4a2c;
+}
+
+.ui-icon.event-trophy {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 96px;
+  height: 96px;
+  border: 0;
+  border-radius: 0;
+  background-color: transparent;
+  box-shadow: none;
+  transform: translate(-50%, -50%);
+  filter: drop-shadow(4px 5px 0 rgba(2,8,18,.55));
+}
+.event-trophy::before,
+.event-trophy::after { display: none; }
+
+.event-sheet h2 { color: var(--navy); text-shadow: 2px 2px #e6bd74; }
+.event-sheet p { color: #514733; }
+.event-burst { color: #f3b641; text-shadow: 3px 3px #7b341f; }
+.event-confetti { color: #2ab8d5; text-shadow: 2px 2px #071426; }
+.event-confetti.c-b { color: #f0b246; }
+.event-confetti.c-c { color: #d65f2c; }
+
+.debug-strip {
+  border: 3px solid var(--pixel-line);
+  border-radius: 2px;
+  background: #7d2f22;
+  box-shadow: inset 0 2px #c05730, 3px 3px #030c1a;
+  color: #ffe7aa;
+}
+
+.console-progress span,
+.contract-targets span {
+  border: 2px solid #1a4b6b;
+  border-radius: 2px;
+  background: #0a223e;
+  box-shadow: inset 0 2px #145071;
+  color: #d7e6e2;
+}
+.console-progress span b { color: #6dd1df; }
+.console-progress em,
+.contract-progress > div:first-child em { color: #8bcbd6; }
+.contract-targets span.done { border-color: #75a943; background: #264a2f; color: #d7ee9d; }
+
+.combo-note,
+.direction-points-head,
+.staff-summary,
+.marketing-head {
+  border: 3px solid var(--pixel-line);
+  border-radius: 2px;
+  background: #0b2947;
+  box-shadow: inset 0 2px #1b5e7c, 3px 3px #76502f;
+  color: #dce9e5;
+}
+.combo-note { color: #92cad4; }
+.combo-note.great { border-color: #6c2a1b; background: #c05028; color: #fff0b8; }
+.direction-points-head small,
+.staff-summary small,
+.marketing-head .modal-intro { color: #8ed3de; }
+.direction-points-head strong { color: var(--gold); }
+.direction-points-head strong.is-ready { background: #2d5c32; color: #d9ef9f; }
+
+.direction-axis button,
+.staff-actions > button {
+  border: 2px solid var(--pixel-line);
+  border-radius: 2px;
+  background: #123c5e;
+  box-shadow: inset 0 2px #236b89, 2px 2px #6c492d;
+  color: #fff0bd;
+}
+.staff-actions > button:nth-child(2) { background: #a94426; box-shadow: inset 0 2px #df7737, 2px 2px #6c492d; }
+.staff-actions > button:nth-child(3) { background: #5d4380; box-shadow: inset 0 2px #8766aa, 2px 2px #6c492d; }
+
+.release-table {
+  border: 3px solid var(--pixel-line);
+  border-radius: 2px;
+  background: #f6dda2;
+  box-shadow: inset 0 2px #fff0bd, 3px 3px #775332;
+}
+.release-table > div { border-bottom: 2px solid #8d6a43; }
+.release-table em { color: #b44024; }
+
+.review-scores div {
+  border: 3px solid var(--pixel-line);
+  border-radius: 2px;
+  background:
+    linear-gradient(rgba(255,255,255,.16), rgba(245,213,139,.08)),
+    url("/game-ui/panel-texture.png") center / 160px 160px repeat;
+  box-shadow: inset 0 2px #fff1c2, 3px 3px #775332;
+}
+.review-scores b { color: #bd4827; text-shadow: 2px 2px #f1c97d; }
+
+.fan-row > i {
+  border: 2px solid var(--pixel-line);
+  border-radius: 1px;
+  background: #0a223d;
+  box-shadow: inset 0 2px #041124;
+}
+.fan-row > i b { box-shadow: inset 0 2px rgba(255,255,255,.26); }
+
+.ui-icon.console-record-icon {
+  width: 52px;
+  height: 52px;
+  opacity: .48;
+  filter: grayscale(.7);
+}
+.ui-icon.console-record-icon.online { opacity: 1; filter: none; }
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 3px solid #6be2ed;
+  outline-offset: 2px;
+}

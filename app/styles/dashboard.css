@@ -1,0 +1,406 @@
+
+/* Cover-aligned pixel-art system */
+.ui-icon {
+  --icon-x: 0%;
+  --icon-y: 0%;
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  background-image: url("/game-ui/ui-icons-atlas.png");
+  background-position: var(--icon-x) var(--icon-y);
+  background-repeat: no-repeat;
+  background-size: 500% 500%;
+  image-rendering: pixelated;
+}
+
+.game-page {
+  padding: 22px;
+  background:
+    linear-gradient(rgba(3, 13, 28, .2), rgba(3, 13, 28, .72)),
+    url("/pixel-studio-night-bg.png") center / cover no-repeat fixed,
+    var(--navy);
+}
+
+.game-shell {
+  width: min(960px, 100%);
+  border: 6px solid var(--pixel-line);
+  border-radius: 4px;
+  background: var(--navy);
+  box-shadow:
+    0 0 0 3px #d69b48,
+    0 0 0 7px #102c49,
+    0 24px 70px rgba(0, 5, 16, .78),
+    inset 0 0 0 2px rgba(255, 237, 190, .45);
+}
+
+.top-hud {
+  flex-basis: 82px;
+  border-bottom: 4px solid #d28a35;
+  background:
+    linear-gradient(rgba(255,255,255,.055) 50%, transparent 50%) 0 0 / 100% 4px,
+    linear-gradient(105deg, #06172e, #0f3c61 48%, #08213e);
+  box-shadow: inset 0 3px #1c5f80, inset 0 -3px #071426;
+  color: var(--cream);
+  text-shadow: 2px 2px var(--navy);
+}
+
+.ui-icon.brand-mark {
+  width: 50px;
+  height: 50px;
+  border: 0;
+  border-radius: 0;
+  background-color: transparent;
+  box-shadow: none;
+  color: transparent;
+  text-shadow: none;
+}
+
+.studio-brand b {
+  color: var(--cream);
+  font-size: 20px;
+  letter-spacing: 3px;
+}
+
+.studio-brand small {
+  color: #72d7e8;
+  font-size: 8px;
+  opacity: 1;
+}
+
+.date-card {
+  border: 3px solid #d5963c;
+  border-radius: 2px;
+  background: #0a203b;
+  box-shadow: inset 0 3px #164f72, 3px 3px #061224;
+}
+
+.date-card span,
+.money-card small { color: #76d5e5; }
+.date-card b,
+.money-card strong { color: var(--cream); }
+.money-card strong { text-shadow: 2px 2px #8f471e; }
+
+.office {
+  isolation: isolate;
+  border-bottom: 4px solid #09182d;
+  background-color: #171c2c;
+  background-image:
+    linear-gradient(180deg, rgba(3,12,26,.04), rgba(3,12,26,.38)),
+    url("/game-ui/office-levels-atlas.png");
+  background-position: center, center top;
+  background-repeat: no-repeat;
+  background-size: 100% 100%, 100% 300%;
+  image-rendering: pixelated;
+}
+
+.office::before { display: none; }
+.office-level-2 { background-position: center, center 50%; }
+.office-level-3 { background-position: center, center bottom; }
+
+.office-light {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 50% 76%, rgba(226, 133, 48, .18), transparent 37%),
+    linear-gradient(90deg, rgba(2,11,24,.28), transparent 15% 85%, rgba(2,11,24,.28));
+  mix-blend-mode: screen;
+}
+
+.workers {
+  z-index: 6;
+  inset: 37% 5% 5%;
+  gap: 5%;
+}
+
+.worker { height: 158px; }
+
+.person-sprite {
+  --sprite-x: 0%;
+  --sprite-y: 0%;
+  position: absolute;
+  z-index: 6;
+  top: 4px;
+  left: 0;
+  width: 91px;
+  height: 78px;
+  background-image: url("/game-ui/character-behaviors-atlas.png");
+  background-position: var(--sprite-x) var(--sprite-y);
+  background-repeat: no-repeat;
+  background-size: 400% 700%;
+  filter: drop-shadow(3px 4px 0 rgba(3, 11, 22, .5));
+  image-rendering: pixelated;
+  transform-origin: 50% 100%;
+}
+
+.person-sprite.uses-sipping-atlas {
+  top: -2px;
+  width: 86px;
+  height: 86px;
+  background-image: url("/game-ui/character-sipping-atlas.png");
+  background-size: 200% 200%;
+}
+
+.behavior-idle .person-sprite { animation: spriteBreathe 1.8s steps(2, end) infinite var(--worker-delay); }
+.behavior-planning .person-sprite { animation: spriteThink 1.35s steps(2, end) infinite var(--worker-delay); }
+.behavior-coding .person-sprite { animation: spriteWork .38s steps(2, end) infinite var(--worker-delay); }
+.behavior-drawing .person-sprite { animation: spriteDraw .7s steps(3, end) infinite var(--worker-delay); }
+.behavior-mixing .person-sprite { animation: spriteMix .62s steps(3, end) infinite var(--worker-delay); }
+.behavior-debugging .person-sprite { animation: spriteDebug .68s steps(2, end) infinite var(--worker-delay); }
+.behavior-sipping .person-sprite { animation: spriteSip 1.8s steps(4, end) infinite var(--worker-delay); }
+.behavior-tired .person-sprite { animation: spriteSleep 1.9s steps(2, end) infinite var(--worker-delay); }
+
+@keyframes spriteBreathe { 50% { transform: translateY(2px); } }
+@keyframes spriteThink { 50% { transform: rotate(1deg) translateY(-2px); } }
+@keyframes spriteWork { 50% { transform: translate(2px, 1px); } }
+@keyframes spriteDraw { 50% { transform: rotate(-1deg) translateX(2px); } }
+@keyframes spriteMix { 50% { transform: translateY(-2px); filter: drop-shadow(3px 4px 0 rgba(3,11,22,.5)) brightness(1.08); } }
+@keyframes spriteDebug { 50% { transform: translateX(4px) rotate(1deg); } }
+@keyframes spriteSip { 0%, 100% { transform: translateY(2px); } 45%, 65% { transform: translateY(-3px) rotate(-1deg); } }
+@keyframes spriteSleep { 50% { transform: rotate(2deg) translate(3px, 3px); } }
+
+.chair {
+  z-index: 2;
+  left: 6px;
+  top: 61px;
+  width: 49px;
+  height: 48px;
+  border: 4px solid var(--pixel-line);
+  border-radius: 3px 3px 0 0;
+  background: #13446a;
+  box-shadow: inset 4px 0 #246c8c, 9px 28px 0 -6px #071426, 34px 28px 0 -6px #071426;
+}
+
+.desk {
+  z-index: 5;
+  top: 76px;
+  height: 61px;
+  border: 4px solid var(--pixel-line);
+  border-radius: 2px;
+  background: linear-gradient(#9b5d32 0 15%, #633820 15%);
+  box-shadow: inset 0 6px #d28a49, 5px 8px 0 -1px #071426;
+}
+
+.desk::before,
+.desk::after { background: #251918; }
+
+.monitor {
+  border-color: var(--pixel-line);
+  background: linear-gradient(135deg, #163c5b 0 48%, #0f2b48 48%);
+  box-shadow: inset 3px 3px #2aa9c5, 2px 2px #071426;
+}
+
+.keyboard {
+  border-color: #0a1729;
+  background: repeating-linear-gradient(90deg, #d7b875 0 3px, #51626c 3px 4px);
+}
+
+.mug { border-color: #301b19; background: #c5522d; }
+
+.work-puff {
+  left: 39%;
+  top: -8px;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  padding: 2px;
+  border: 3px solid var(--pixel-line);
+  border-radius: 2px;
+  background: var(--cream);
+  box-shadow: 3px 3px #071426;
+  opacity: .95;
+}
+
+.work-puff::after {
+  bottom: -8px;
+  border-width: 6px 6px 0 0;
+  border-color: var(--pixel-line) transparent transparent transparent;
+}
+
+.work-puff .ui-icon { width: 30px; height: 30px; }
+
+.name-tag {
+  bottom: -4px;
+  min-width: 76px;
+  border: 3px solid var(--pixel-line);
+  border-radius: 2px;
+  background: var(--cream);
+  box-shadow: 3px 3px #071426;
+  color: var(--navy);
+}
+
+.name-tag small { color: #a04a27; }
+
+.staff-sprite-avatar {
+  --sprite-x: 0%;
+  display: inline-block;
+  background-color: #0b2542;
+  background-image: url("/game-ui/character-behaviors-atlas.png");
+  background-position: var(--sprite-x) 0%;
+  background-repeat: no-repeat;
+  background-size: 400% 700%;
+  image-rendering: pixelated;
+}
+
+.staff-sprite-avatar.mini-avatar {
+  width: 48px;
+  height: 48px;
+  border: 3px solid var(--pixel-line);
+  border-radius: 2px;
+  box-shadow: inset 0 0 0 2px #2e7792, 3px 3px #071426;
+}
+
+.secretary-tip {
+  bottom: 8px;
+  border: 3px solid var(--pixel-line);
+  border-radius: 2px;
+  background: var(--cream);
+  box-shadow: 4px 4px #071426;
+  color: var(--navy);
+}
+
+.ui-icon.secretary-face {
+  width: 42px;
+  height: 42px;
+  border: 0;
+  border-radius: 0;
+  background-color: transparent;
+}
+
+.floating-stats { gap: 6px; }
+.floating-stats span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  border: 3px solid var(--pixel-line);
+  border-radius: 2px;
+  background: rgba(7, 26, 50, .92);
+  box-shadow: inset 0 2px #1b587a, 3px 3px rgba(3,11,22,.55);
+  color: var(--cream);
+}
+.floating-stats .ui-icon { width: 22px; height: 22px; }
+
+.news-strip {
+  min-height: 27px;
+  border-top: 3px solid var(--pixel-line);
+  border-bottom: 3px solid var(--pixel-line);
+  background: linear-gradient(90deg, #a93f24, #dd662e 35%, #a33b22);
+  color: #fff0bd;
+  text-shadow: 1px 1px #6a2519;
+}
+.news-strip b {
+  border-right: 3px solid #6f281b;
+  background: #f0b246;
+  color: var(--navy);
+  text-shadow: none;
+}
+.news-strip em { color: #8ee6ee; }
+
+.project-console {
+  flex-basis: 180px;
+  border-top: 0;
+  background:
+    linear-gradient(rgba(255,255,255,.035) 50%, transparent 50%) 0 0 / 100% 4px,
+    linear-gradient(110deg, #071a32, #0c3152 60%, #071a32);
+  box-shadow: inset 0 4px #174e70, inset 0 -4px #041023;
+  color: var(--cream);
+}
+
+.project-heading small { color: #6fd1e1; }
+.project-heading strong { color: var(--cream); }
+.percent { color: #7de0eb; text-shadow: 2px 2px #071426; }
+
+.progress-track {
+  border: 3px solid #020b18;
+  background: #030d1c;
+  box-shadow: inset 0 3px #000711, 0 2px #23516d;
+}
+.progress-track i {
+  background: repeating-linear-gradient(135deg, rgba(255,255,255,.25) 0 5px, transparent 5px 10px), #70b640;
+  box-shadow: inset 0 3px #b7e46e;
+}
+
+.stage-ribbon span {
+  border: 2px solid #31506a;
+  background: #0c223d;
+  color: #7591a7;
+}
+.stage-ribbon span.done { border-color: #4d842e; background: #264b2d; color: #b8df7d; }
+.stage-ribbon span.active { border-color: #e59837; background: #a94325; color: #fff0bd; box-shadow: inset 0 2px #e87539; }
+
+.quality-grid span {
+  border: 2px solid #193f5f;
+  border-radius: 2px;
+  background: #0b2542;
+  color: #d9e8e4;
+  box-shadow: inset 0 2px #175174;
+}
+.quality-grid .ui-icon { width: 25px; height: 25px; }
+.quality-grid b { color: var(--cream); }
+
+.idle-project { color: var(--cream); }
+.idle-project small { color: #8cc8d5; }
+.ui-icon.idle-icon {
+  width: 58px;
+  height: 58px;
+  border: 0;
+  background-color: transparent;
+  text-shadow: none;
+}
+
+.bottom-menu {
+  flex-basis: 82px;
+  gap: 7px;
+  padding: 7px 10px 9px;
+  border-top: 4px solid #d89437;
+  background: #06162b;
+  box-shadow: inset 0 3px #164968;
+}
+
+.bottom-menu button {
+  gap: 0;
+  border: 3px solid #020b18;
+  border-radius: 2px;
+  background: linear-gradient(#123c5e 0 66%, #0a2542 66%);
+  box-shadow: inset 0 3px #23688a, 3px 3px #020914;
+  color: #d7e8e5;
+  text-shadow: 1px 1px #020914;
+}
+.bottom-menu button.is-active {
+  border-color: #5f2719;
+  background: linear-gradient(#dd6a31 0 66%, #a83e23 66%);
+  box-shadow: inset 0 3px #f0a448, 3px 3px #020914;
+  color: #fff0bd;
+}
+.bottom-menu .ui-icon { width: 44px; height: 44px; }
+.bottom-menu span:last-child { font-size: 11px; }
+
+.utility-row button {
+  border: 2px solid var(--pixel-line);
+  border-radius: 2px;
+  background: #0c2b49;
+  box-shadow: inset 0 2px #1c5b7a, 2px 2px #041020;
+  color: var(--cream);
+}
+.utility-row button:hover,
+.utility-row button:focus-visible { border-color: #e39a3d; background: #a84325; }
+
+.toast,
+.pause-badge {
+  border: 3px solid var(--pixel-line);
+  border-radius: 2px;
+  background: var(--cream);
+  box-shadow: 5px 5px #071426;
+  color: var(--navy);
+}
+
+.modal-backdrop {
+  background:
+    repeating-linear-gradient(135deg, rgba(42,184,213,.045) 0 3px, transparent 3px 8px),
+    rgba(2, 9, 21, .83);
+  backdrop-filter: blur(2px);
+}

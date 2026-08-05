@@ -56,13 +56,16 @@
 ## 项目结构
 
     app/
-      page.tsx          游戏界面与主要交互
-      game-balance.ts  核心数值函数
-      globals.css       像素风界面与人物动画
-      layout.tsx        页面布局与分享信息
+      page.tsx          页面编排与交互绑定
+      game/             类型、静态数据、规则、引擎与存档迁移
+      components/       仪表盘、业务弹窗与通用像素组件
+      styles/           仪表盘、弹窗与响应式样式
+      game-balance.ts   核心数值函数
+      globals.css        全局基础与既有像素动画
+      layout.tsx         页面布局与分享信息
     public/
       game-ui/          人物、办公室、图标和面板素材
-    tests/              构建、界面和数值测试
+    tests/              构建、界面、引擎、迁移和数值测试
     ROADMAP.md          后续开发计划
 
 ## 存档说明
