@@ -1,98 +1,78 @@
-# vinext-starter
+# 像素工坊
 
-A clean full-stack starter running on
-[vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and
-Drizzle support.
+一款以游戏公司经营为主题的像素风网页模拟游戏。玩家需要组建团队、选择平台与题材、完成多阶段开发，并通过评分、销量和公司成长打造自己的游戏工作室。
 
-## Prerequisites
+## 主要玩法
 
-- Node.js `>=22.13.0`
+- 企划、程序、美术、音乐和除错五阶段游戏开发
+- 平台、类型、题材、组合评价和八维开发方向
+- 员工招聘、培训、升级、体力、薪资与转职
+- 委托开发、宣传推广、粉丝人群和旅行商人
+- 媒体评分、周销量、排行榜、续作与年度奖项
+- 办公室扩建、自研主机和二十年经营结算
+- 浏览器本地保存与自动保存
 
-## Quick Start
+## 技术栈
 
-```bash
-npm install
-npm run dev
-npm run build
-```
+- Next.js 16
+- React 19
+- TypeScript
+- Tailwind CSS/PostCSS
+- Node.js 内置测试运行器
 
-This starter does not use `wrangler.jsonc`.
+项目不依赖专用托管平台、云数据库或账号服务。游戏存档保存在当前浏览器的 localStorage 中。
 
-## Included Shape
+## 环境要求
 
-- edit site code under `app/`
-- `.openai/hosting.json` declares optional Sites D1 and R2 bindings
-- `vite.config.ts` simulates declared bindings for local development
-- `db/schema.ts` starts intentionally empty
-- `examples/d1/` contains an optional D1 example surface
-- `drizzle.config.ts` supports local migration generation when needed
+- Node.js 22.13 或更高版本
+- npm
 
-## Workspace Auth Headers
+## 本地运行
 
-OpenAI workspace sites can read the current user's email from
-`oai-authenticated-user-email`.
+安装依赖：
 
-SIWC-authenticated workspace sites may also receive
-`oai-authenticated-user-full-name` when the user's SIWC profile has a non-empty
-`name` claim. The full-name value is percent-encoded UTF-8 and is accompanied by
-`oai-authenticated-user-full-name-encoding: percent-encoded-utf-8`.
+    npm install
 
-Treat the full name as optional and fall back to email when it is absent:
+启动开发服务器：
 
-```tsx
-import { headers } from "next/headers";
+    npm run dev
 
-export default async function Home() {
-  const requestHeaders = await headers();
-  const email = requestHeaders.get("oai-authenticated-user-email");
-  const encodedFullName = requestHeaders.get("oai-authenticated-user-full-name");
-  const fullName =
-    encodedFullName &&
-    requestHeaders.get("oai-authenticated-user-full-name-encoding") ===
-      "percent-encoded-utf-8"
-      ? decodeURIComponent(encodedFullName)
-      : null;
+默认访问地址为 http://localhost:3000。
 
-  const displayName = fullName ?? email;
-  // ...
-}
-```
+## 常用命令
 
-## Optional Dispatch-Owned ChatGPT Sign-In
+    npm run dev
+    npm run build
+    npm run start
+    npm run lint
+    npm test
 
-Import the ready-to-use helpers from `app/chatgpt-auth.ts` when the site needs
-optional or required ChatGPT sign-in:
+- npm run dev：启动本地开发环境
+- npm run build：生成标准 Next.js 生产构建
+- npm run start：运行已经构建的生产版本
+- npm run lint：执行代码检查
+- npm test：构建项目并运行界面、素材和数值测试
 
-- Use `getChatGPTUser()` for optional signed-in UI.
-- Use `requireChatGPTUser(returnTo)` for server-rendered pages that should send
-  anonymous visitors through Sign in with ChatGPT.
-- Use `chatGPTSignInPath(returnTo)` and `chatGPTSignOutPath(returnTo)` for
-  browser links or actions.
-- Pass a same-origin relative `returnTo` path for the destination after sign-in
-  or sign-out. The helper validates and safely encodes it.
-- Mark protected pages with `export const dynamic = "force-dynamic"` because
-  they depend on per-request identity headers.
+## 项目结构
 
-Dispatch owns `/signin-with-chatgpt`, `/signout-with-chatgpt`, `/callback`, the
-OAuth cookies, and identity header injection. Do not implement app routes for
-those reserved paths. Routes that do not import and call the helper remain
-anonymous-compatible.
+    app/
+      page.tsx          游戏界面与主要交互
+      game-balance.ts  核心数值函数
+      globals.css       像素风界面与人物动画
+      layout.tsx        页面布局与分享信息
+    public/
+      game-ui/          人物、办公室、图标和面板素材
+    tests/              构建、界面和数值测试
+    ROADMAP.md          后续开发计划
 
-SIWC establishes identity only; it does not prove workspace membership. Use the
-Sites hosting platform's access policy controls for workspace-wide restrictions,
-or enforce explicit server-side membership or allowlist checks.
+## 存档说明
 
-Use SIWC for account pages, user-specific dashboards, saved records, and write
-actions tied to the current ChatGPT user. Leave public content anonymous.
+游戏每八秒自动保存，也可以通过界面手动保存。存档仅存在当前浏览器中，清理浏览器数据或点击“新开公司”会移除当前进度。
 
-## Useful Commands
+## 开发计划
 
-- `npm run dev`: start local development
-- `npm run build`: verify the vinext build output
-- `npm test`: build the starter and verify its rendered loading skeleton
-- `npm run db:generate`: generate Drizzle migrations after schema changes
+后续的代码拆分、决策反馈、负责人创作演出和玩法补全计划见 [ROADMAP.md](./ROADMAP.md)。
 
-## Learn More
+## 说明
 
-- [vinext Documentation](https://github.com/cloudflare/vinext)
-- [Drizzle D1 Guide](https://orm.drizzle.team/docs/get-started/d1-new)
+本项目的经营题材与节奏参考了《游戏发展国》等游戏公司模拟作品，角色、界面、素材、文案和数值均为本项目原创实现。
