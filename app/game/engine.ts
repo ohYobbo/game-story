@@ -1,11 +1,15 @@
 import {
   HALL_OF_FAME_SCORE,
   getAnnualPayroll,
+  getConsoleInitialUsers,
   getContentPopularity,
   getDebugGain,
   getDevelopmentGain,
   getEnergyModifier,
   getFirstWeekSales,
+  getGeneralProjectGain,
+  getGeneralQualityGain,
+  getLeadRepeatMultiplier,
   getQualityGain,
   getReleaseFatigueMultiplier,
   getReviewScores,
@@ -27,12 +31,18 @@ import {
   formatCash,
   formatUsers,
   getAudience,
+  getDirectionAudienceGains,
   getDirectionConfig,
   getKnowledgeLevel,
   getOfficeCapacity,
   getSalesRank,
   getStageTarget,
 } from "./rules.ts";
+import {
+  predictItemUse,
+  predictMarketing,
+  predictTraining,
+} from "./predictions.ts";
 import type {
   EventData,
   FanSegments,
@@ -40,6 +50,7 @@ import type {
   Inventory,
   Project,
   RandomSource,
+  ResultData,
   ReviewData,
 } from "./types";
 
@@ -47,6 +58,7 @@ export type EngineEffect =
   | { type: "event"; event: EventData }
   | { type: "review"; review: ReviewData }
   | { type: "toast"; message: string }
+  | { type: "result"; result: ResultData }
   | { type: "pause-for-stage" };
 
 export type EngineResult = {
@@ -101,12 +113,13 @@ function completeProject(
 ): EngineResult {
   if (finished.kind === "contract") {
     const reward = finished.reward ?? 600;
+    const reputationGain = clamp(state.reputation + 1, 0, 100) - state.reputation;
     return {
       state: {
         ...state,
         cash: state.cash + reward,
         research: state.research + 4,
-        reputation: clamp(state.reputation + 1, 0, 100),
+        reputation: state.reputation + reputationGain,
         project: null,
         industryNews: `像素工坊按期完成“${finished.name}”，业界评价稳步提升。`,
       },
@@ -117,7 +130,12 @@ function completeProject(
           title: "委托交付",
           headline: "客户非常满意！",
           body: `“${finished.name}”在约定期限内完成，所有品质指标均已通过验收。`,
-          reward: `报酬 ${formatCash(reward)} · 研究 +4 · 业界口碑 +1`,
+          reward: `报酬 ${formatCash(reward)} · 研究 +4 · 业界口碑 +${reputationGain}`,
+          results: [
+            { category: "resource", label: "资金", value: `+${formatCash(reward)}`, tone: "positive" },
+            { category: "resource", label: "研究", value: "+4", tone: "positive" },
+            { category: "risk", label: "业界口碑", value: `+${reputationGain}`, tone: reputationGain > 0 ? "positive" : "neutral", detail: reputationGain > 0 ? undefined : "已达上限" },
+          ],
         },
       }],
     };
@@ -130,8 +148,10 @@ function completeProject(
         sum + member.code + member.scenario + member.art + member.sound,
       0,
     );
-    const initialUsers = Math.round(
-      (260_000 + state.fans * 110 + totalPower * 850) * hardwarePower,
+    const initialUsers = getConsoleInitialUsers(
+      state.fans,
+      totalPower,
+      hardwarePower,
     );
     return {
       state: {
@@ -150,6 +170,11 @@ function completeProject(
           headline: "像素盒子 正式发售！",
           body: `${finished.consoleSpec?.cpu ?? "定制芯片"}、${finished.consoleSpec?.media ?? "专用媒体"}与${finished.consoleSpec?.body ?? "家用机身"}顺利量产。今后开发新作时，可以选择自家平台并免除高额授权费。`,
           reward: `首批用户 ${formatUsers(initialUsers)} 人 · 粉丝 +600`,
+          results: [
+            { category: "resource", label: "平台用户", value: `+${formatUsers(initialUsers)}`, tone: "positive" },
+            { category: "resource", label: "粉丝", value: "+600", tone: "positive" },
+            { category: "resource", label: "研究", value: "+35", tone: "positive" },
+          ],
         },
       }],
     };
@@ -194,8 +219,10 @@ function completeProject(
     (state.themeExperience[finished.theme] ?? 0) + 1;
   const nextGenreLevel = getKnowledgeLevel(nextGenreExperience);
   const nextThemeLevel = getKnowledgeLevel(nextThemeExperience);
-  const reputationChange =
+  const reputationIntent =
     totalScore >= 34 ? 8 : totalScore >= 28 ? 4 : totalScore >= 22 ? 1 : -4;
+  const reputationChange =
+    clamp(state.reputation + reputationIntent, 0, 100) - state.reputation;
   const fanGrowth = Math.max(4, Math.round(sales / 220));
   const audienceScale = clamp(totalScore / 28, .6, 1.6);
   const directionPoints = finished.directionPoints ?? DEFAULT_DIRECTION_POINTS;
@@ -206,25 +233,13 @@ function completeProject(
   ][]) {
     fanSegments[key] += Math.max(1, Math.round(value * audienceScale));
   }
-  fanSegments.kids += Math.round(
-    (directionPoints.cuteness + directionPoints.approachability) * audienceScale,
+  const directionAudienceGains = getDirectionAudienceGains(
+    directionPoints,
+    audienceScale,
   );
-  fanSegments.teens += Math.round(
-    directionPoints.niche * 1.4 * audienceScale,
-  );
-  fanSegments.adults += Math.round(
-    directionPoints.realism * audienceScale,
-  );
-  fanSegments.seniors += Math.round(
-    directionPoints.simplicity * audienceScale,
-  );
-  fanSegments.male += Math.round(
-    (directionPoints.realism + directionPoints.innovation) * .6 * audienceScale,
-  );
-  fanSegments.female += Math.round(
-    (directionPoints.cuteness + directionPoints.approachability) * .6 *
-      audienceScale,
-  );
+  for (const key of Object.keys(directionAudienceGains) as (keyof FanSegments)[]) {
+    fanSegments[key] += directionAudienceGains[key];
+  }
   const prior = state.releases.map((item) =>
     item.name === finished.sequelOf
       ? { ...item, sequelEligible: false }
@@ -264,7 +279,7 @@ function completeProject(
       cash: state.cash + income,
       fans: state.fans + fanGrowth,
       fanSegments,
-      reputation: clamp(state.reputation + reputationChange, 0, 100),
+      reputation: state.reputation + reputationChange,
       research:
         state.research + getDirectionConfig(finished.direction).research,
       releases,
@@ -294,6 +309,12 @@ function completeProject(
         reputationChange,
         growth,
         salesRank,
+        results: [
+          { category: "resource", label: "资金", value: `+${formatCash(income)}`, tone: "positive" },
+          { category: "resource", label: "粉丝", value: `+${fanGrowth}`, tone: "positive" },
+          { category: "risk", label: "业界口碑", value: `${reputationChange >= 0 ? "+" : ""}${reputationChange}`, tone: reputationChange > 0 ? "positive" : reputationChange < 0 ? "negative" : "neutral", detail: reputationChange === 0 ? "已达数值边界" : undefined },
+          { category: "quality", label: "总评分", value: `${totalScore}/40`, tone: totalScore >= 22 ? "positive" : "negative" },
+        ],
       },
     }],
   };
@@ -595,12 +616,16 @@ function advanceProject(
     };
   }
 
-  const gain =
-    (activeTotalPower / 22) *
-    directionConfig.speed *
-    energyModifier *
-    (.85 + random() * .3);
-  const qualityGain = (activeTotalPower / 105) * directionConfig.quality;
+  const gain = getGeneralProjectGain(
+    activeTotalPower,
+    directionConfig.speed,
+    energyModifier,
+    random(),
+  );
+  const qualityGain = getGeneralQualityGain(
+    activeTotalPower,
+    directionConfig.quality,
+  );
   const project: Project = {
     ...current,
     progress: current.progress + gain,
@@ -631,11 +656,12 @@ function advanceProject(
     isNewWeek &&
     (project.elapsedWeeks ?? 0) >= (current.deadlineWeeks ?? 12)
   ) {
+    const reputationLoss = clamp(state.reputation - 5, 0, 100) - state.reputation;
     return {
       state: {
         ...state,
         project: null,
-        reputation: clamp(state.reputation - 5, 0, 100),
+        reputation: state.reputation + reputationLoss,
         industryNews: `“${current.name}”未能按期交付，工作室的业界口碑受损。`,
       },
       effects: [{
@@ -645,7 +671,11 @@ function advanceProject(
           title: "委托超时",
           headline: "客户取消了委托……",
           body: `“${current.name}”没有在 ${current.deadlineWeeks ?? 12} 周内达到全部品质指标，团队无法获得任何报酬。`,
-          reward: "报酬 ¥0千 · 业界口碑 -5",
+          reward: `报酬 ¥0千 · 业界口碑 ${reputationLoss}`,
+          results: [
+            { category: "resource", label: "委托报酬", value: "¥0千", tone: "neutral", detail: "未达到交付条件" },
+            { category: "risk", label: "业界口碑", value: `${reputationLoss}`, tone: reputationLoss < 0 ? "negative" : "neutral" },
+          ],
         },
       }],
     };
@@ -850,12 +880,8 @@ function applyMarketing(
   if (state.cash < action.cost) {
     return { state, effects: [{ type: "toast", message: "资金不足" }] };
   }
-  const previousUses =
-    state.project?.kind === "game"
-      ? state.project.advertisingUses?.[action.name] ?? 0
-      : latestRelease?.advertisingUses?.[action.name] ?? 0;
-  const diminishing = Math.max(.15, 1 - previousUses * .25);
-  const effectiveHype = Math.max(1, Math.round(action.hype * diminishing));
+  const prediction = predictMarketing(state, action);
+  const { previousUses, effectiveHype } = prediction;
   let project = state.project;
   let releases = state.releases;
   if (project?.kind === "game") {
@@ -868,15 +894,11 @@ function applyMarketing(
       },
     };
   } else if (latestRelease) {
-    const addedDemand = Math.round(
-      Math.max(latestRelease.weeklySales ?? 0, latestRelease.sales * .04) *
-        (effectiveHype / 8),
-    );
     releases = releases.map((item, index) =>
       index === 0
         ? {
             ...item,
-            remainingDemand: (item.remainingDemand ?? 0) + addedDemand,
+            remainingDemand: (item.remainingDemand ?? 0) + prediction.addedDemand,
             advertisingUses: {
               ...(item.advertisingUses ?? {}),
               [action.name]: previousUses + 1,
@@ -900,11 +922,21 @@ function applyMarketing(
       },
     },
     effects: [{
-      type: "toast",
-      message:
-        previousUses > 0
-          ? `${action.name}再次投放，效果开始递减`
-          : `${action.name}引发了话题！`,
+      type: "result",
+      result: {
+        title: "宣传投放结果",
+        summary: previousUses > 0
+          ? `${action.name}再次投放，重复曝光使效果降低至 ${Math.round(prediction.multiplier * 100)}%。`
+          : `${action.name}完成投放，目标人群开始关注作品。`,
+        entries: [
+          { category: "resource", label: "资金", value: `-${formatCash(action.cost)}`, tone: "negative" },
+          state.project?.kind === "game"
+            ? { category: "quality", label: "作品热度", value: `+${effectiveHype}`, tone: "positive" }
+            : { category: "quality", label: "后续需求", value: `+${prediction.addedDemand.toLocaleString()}`, tone: prediction.addedDemand > 0 ? "positive" : "neutral", detail: prediction.addedDemand > 0 ? undefined : "作品已无有效销量" },
+          { category: "resource", label: "粉丝", value: `+${prediction.fanGain}`, tone: "positive" },
+          { category: "risk", label: "重复衰减", value: previousUses > 0 ? `${Math.round((1 - prediction.multiplier) * 100)}%` : "未触发", tone: previousUses > 0 ? "negative" : "neutral" },
+        ],
+      },
     }],
   };
 }
@@ -926,13 +958,12 @@ function trainStaff(
       effects: [{ type: "toast", message: "体力不足，先让员工休息" }],
     };
   }
-  const used = member.training?.[method.id] ?? 0;
-  const diminishing = Math.max(.2, 1 - used * .18);
+  const prediction = predictTraining(member, method, state.unlockedThemes);
+  const used = prediction.used;
   const superTraining = random() < .12;
-  const multiplier = diminishing * (superTraining ? 3 : 1);
-  const canUnlock =
-    member.role === method.unlock.role && member.level >= method.unlock.level;
-  const unlocked = canUnlock && !state.unlockedThemes.includes(method.unlock.name);
+  const multiplier = prediction.multiplier * (superTraining ? 3 : 1);
+  const canUnlock = prediction.canUnlock;
+  const unlocked = prediction.willDiscover;
   const staff = state.staff.map((item) =>
     item.id === member.id
       ? {
@@ -972,7 +1003,24 @@ function trainStaff(
         ? [...state.unlockedThemes, method.unlock.name]
         : state.unlockedThemes,
     },
-    effects: [{ type: "toast", message }],
+    effects: [{
+      type: "result",
+      result: {
+        title: "培训结果",
+        summary: message,
+        entries: [
+          { category: "resource", label: "资金", value: `-${formatCash(method.cost)}`, tone: "negative" },
+          { category: "resource", label: "体力", value: `-${method.energy}`, tone: "negative" },
+          ...Object.entries(method.gains).map(([key, value]) => {
+            const labels = { code: "程序", scenario: "剧本", art: "画面", sound: "音乐" };
+            const gain = Math.max(0, Math.round((value ?? 0) * multiplier));
+            return { category: "quality" as const, label: labels[key as keyof typeof labels], value: `+${gain}`, tone: gain > 0 ? "positive" as const : "neutral" as const, detail: gain > 0 ? undefined : "重复训练后未提升" };
+          }),
+          ...(unlocked ? [{ category: "quality" as const, label: "发现题材", value: method.unlock.name, tone: "positive" as const }] : []),
+          { category: "risk", label: "重复衰减", value: used > 0 ? `${Math.round((1 - prediction.multiplier) * 100)}%` : "未触发", tone: used > 0 ? "negative" : "neutral" },
+        ],
+      },
+    }],
   };
 }
 
@@ -1026,6 +1074,10 @@ function applyItemAction(
     return { state, effects: [{ type: "toast", message: "库存不足" }] };
   }
   if (key === "energyDrink") {
+    const energyGain = state.staff.reduce(
+      (sum, member) => sum + (clamp(member.energy + 42, 0, 100) - member.energy),
+      0,
+    );
     return {
       state: {
         ...state,
@@ -1035,7 +1087,17 @@ function applyItemAction(
           energy: clamp(member.energy + 42, 0, 100),
         })),
       },
-      effects: [{ type: "toast", message: "全员恢复体力！" }],
+      effects: [{
+        type: "result",
+        result: {
+          title: "道具使用结果",
+          summary: "活力汽水已分给全体员工。",
+          entries: [
+            { category: "resource", label: "库存", value: "-1", tone: "negative" },
+            { category: "resource", label: "全员体力", value: `+${Math.round(energyGain)}`, tone: "positive", detail: "实际恢复总量" },
+          ],
+        },
+      }],
     };
   }
   if (!state.project || state.project.kind !== "game") {
@@ -1044,15 +1106,20 @@ function applyItemAction(
       effects: [{ type: "toast", message: "开发游戏时才能使用这个道具" }],
     };
   }
-  const researchCost = 4 + (state.project.itemUses ?? 0) * 2;
+  const prediction = predictItemUse(state, key);
+  const researchCost = prediction.researchCost;
   if (state.research < researchCost) {
     return {
       state,
       effects: [{ type: "toast", message: `使用需要 ${researchCost} 点研究` }],
     };
   }
-  const multiplier = 1 / (1 + (state.project.itemUses ?? 0) * .7);
-  const amount = Math.max(3, Math.round(10 * multiplier));
+  const amount = prediction.amount;
+  const oldBugs = state.project.bugs;
+  const qualityLabel = key === "funBoost" ? "趣味" : key === "creativityBoost" ? "创意" : key === "graphicsBoost" ? "画面" : key === "soundBoost" ? "音乐" : "漏洞";
+  const actualChange = key === "bugSpray"
+    ? Math.min(oldBugs, amount)
+    : amount;
   return {
     state: {
       ...state,
@@ -1068,17 +1135,25 @@ function applyItemAction(
         sound: state.project.sound + (key === "soundBoost" ? amount : 0),
         bugs:
           key === "bugSpray"
-            ? Math.max(0, state.project.bugs - Math.max(6, amount))
+            ? Math.max(0, state.project.bugs - amount)
             : state.project.bugs,
         itemUses: (state.project.itemUses ?? 0) + 1,
       },
     },
     effects: [{
-      type: "toast",
-      message:
-        (state.project.itemUses ?? 0) > 0
-          ? "道具生效，但连续使用效果有所降低"
-          : "道具效果显著！",
+      type: "result",
+      result: {
+        title: "道具使用结果",
+        summary: (state.project.itemUses ?? 0) > 0
+          ? `道具已生效，连续使用效果为首次的 ${Math.round(prediction.multiplier * 100)}%。`
+          : "道具效果已提交到当前项目。",
+        entries: [
+          { category: "resource", label: "库存", value: "-1", tone: "negative" },
+          { category: "resource", label: "研究", value: `-${researchCost}`, tone: "negative" },
+          { category: key === "bugSpray" ? "risk" : "quality", label: qualityLabel, value: `${key === "bugSpray" ? "-" : "+"}${actualChange}`, tone: actualChange > 0 ? "positive" : "neutral", detail: actualChange > 0 ? undefined : "当前没有可作用的漏洞" },
+          { category: "risk", label: "连续使用衰减", value: (state.project.itemUses ?? 0) > 0 ? `${Math.round((1 - prediction.multiplier) * 100)}%` : "未触发", tone: (state.project.itemUses ?? 0) > 0 ? "negative" : "neutral" },
+        ],
+      },
     }],
   };
 }
@@ -1136,19 +1211,25 @@ export function applyGameAction(
         cash: state.cash - (action.cost ?? 0),
         project: action.project,
       });
-    case "choose-lead":
+    case "choose-lead": {
+      if (!state.project || state.project.kind !== "game" || state.project.stage === "debug") {
+        return noEffects(state);
+      }
+      const stage = state.project.stage ?? "planning";
+      const identity = action.leadStaffId ?? "external";
+      const repeated = state.lastStageLeads[stage] === identity;
       return noEffects({
         ...state,
         cash: state.cash - (action.cost ?? 0),
-        project: state.project
-          ? {
-              ...state.project,
-              leadStaffId: action.leadStaffId,
-              leadName: action.leadName,
-              leadSkill: action.leadSkill,
-            }
-          : null,
+        lastStageLeads: { ...state.lastStageLeads, [stage]: identity },
+        project: {
+          ...state.project,
+          leadStaffId: action.leadStaffId,
+          leadName: action.leadName,
+          leadSkill: action.leadSkill * getLeadRepeatMultiplier(repeated),
+        },
       });
+    }
     case "apply-marketing":
       return applyMarketing(state, action);
     case "train-staff":
@@ -1177,8 +1258,16 @@ export function applyGameAction(
               : state.project,
         },
         effects: [{
-          type: "toast",
-          message: `${action.label}大获成功！粉丝 +${action.gainedFans}`,
+          type: "result",
+          result: {
+            title: "展会结果",
+            summary: `${action.label}顺利结束，现场反馈已经计入公司状态。`,
+            entries: [
+              { category: "resource", label: "资金", value: `-${formatCash(action.cost)}`, tone: action.cost > 0 ? "negative" : "neutral" },
+              { category: "resource", label: "粉丝", value: `+${action.gainedFans}`, tone: action.gainedFans > 0 ? "positive" : "neutral" },
+              { category: "quality", label: "作品热度", value: `+${state.project?.kind === "game" ? action.gainedHype : 0}`, tone: state.project?.kind === "game" && action.gainedHype > 0 ? "positive" : "neutral" },
+            ],
+          },
         }],
       };
     case "complete-project":

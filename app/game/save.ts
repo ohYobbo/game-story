@@ -13,7 +13,7 @@ import {
 } from "./rules.ts";
 import type { GameState, LegacySaveState, SaveState } from "./types";
 
-export const SAVE_SCHEMA_VERSION = 3;
+export const SAVE_SCHEMA_VERSION = 4;
 export const SAVE_STORAGE_KEY = "pixel-studio-save";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -111,6 +111,7 @@ export function migrateSave(value: unknown): GameState | null {
     merchantPurchases: saved.merchantPurchases ?? 0,
     industryNews:
       saved.industryNews ?? "游戏行业正在迎来新一轮主机竞争。",
+    lastStageLeads: { ...(saved.lastStageLeads ?? {}) },
   };
 }
 
@@ -126,6 +127,7 @@ export function serializeGameState(state: GameState): SaveState {
     unlockedGenres: [...state.unlockedGenres],
     unlockedThemes: [...state.unlockedThemes],
     inventory: { ...state.inventory },
+    lastStageLeads: { ...state.lastStageLeads },
     schemaVersion: SAVE_SCHEMA_VERSION,
     balanceVersion: BALANCE_VERSION,
   };

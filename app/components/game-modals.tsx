@@ -13,7 +13,6 @@ import {
   DIRECTION_AXES,
   DIRECTIONS,
   EVENT_ICON_INDEX,
-  GREAT_COMBOS,
   HIRING_METHODS,
   SHOP_ITEMS,
   STAGE_INFO,
@@ -27,6 +26,16 @@ import {
   getKnowledgeLevel,
   getOfficeCapacity,
 } from "../game/rules";
+import {
+  predictContract,
+  predictExternalLead,
+  predictItemUse,
+  predictMarketing,
+  predictStageLead,
+  predictTraining,
+  type ConsolePrediction,
+  type GamePlanPrediction,
+} from "../game/predictions";
 import type {
   DirectionKey,
   DirectionPoints,
@@ -36,9 +45,10 @@ import type {
   Inventory,
   Modal,
   ReviewData,
+  ResultData,
   Staff,
 } from "../game/types";
-import { ModalShell, StaffAvatar, UiIcon } from "./pixel-ui";
+import { ModalShell, ResultEntries, StaffAvatar, UiIcon } from "./pixel-ui";
 
 type Platform = {
   name: string;
@@ -56,6 +66,9 @@ type GameModalsProps = {
   announce: (message: string) => void;
   eventData: EventData | null;
   review: ReviewData | null;
+  resultData: ResultData | null;
+  planPrediction: GamePlanPrediction | null;
+  consolePrediction: ConsolePrediction;
   selectedStaff: Staff | null;
   availablePlatforms: Platform[];
   sequelCandidates: GameState["releases"];
@@ -124,6 +137,9 @@ export function GameModals({
   announce,
   eventData,
   review,
+  resultData,
+  planPrediction,
+  consolePrediction,
   selectedStaff,
   availablePlatforms,
   sequelCandidates,
@@ -174,6 +190,8 @@ export function GameModals({
   attendExpo,
 }: GameModalsProps) {
   const {
+    cash,
+    research,
     project,
     ownConsole,
     consoleUsers,
@@ -254,8 +272,8 @@ export function GameModals({
                   <label className="field-label">游戏类型<select value={selectedGenre} disabled={Boolean(selectedSequelName)} onChange={(e) => setSelectedGenre(e.target.value)}>{unlockedGenres.map((item) => <option key={item} value={item}>{item} Lv.{getKnowledgeLevel(genreExperience[item] ?? 0)}</option>)}</select></label>
                   <label className="field-label">游戏题材<select value={selectedTheme} disabled={Boolean(selectedSequelName)} onChange={(e) => setSelectedTheme(e.target.value)}>{unlockedThemes.map((item) => <option key={item} value={item}>{item} Lv.{getKnowledgeLevel(themeExperience[item] ?? 0)}</option>)}</select></label>
                 </div>
-                <div className={`combo-note ${GREAT_COMBOS.has(`${selectedGenre}|${selectedTheme}`) ? "great" : ""}`}>
-                  组合评价：{GREAT_COMBOS.has(`${selectedGenre}|${selectedTheme}`) ? "杰作预感！" : "普通"}
+                <div className={`combo-note ${planPrediction?.combinationLevel === "杰作相性" ? "great" : ""}`}>
+                  组合评价：{planPrediction?.combinationLevel ?? "计算中"}
                 </div>
                 <div className="field-label">开发方针</div>
                 <div className="direction-row">
@@ -277,6 +295,23 @@ export function GameModals({
                     </div>
                   ))}
                 </div>
+                {planPrediction && (
+                  <section className="prediction-panel" aria-label="企划预测摘要">
+                    <div className="prediction-title"><b>企划确认摘要</b><small>区间按当前团队及最佳内部负责人估算，随机开发事件可能改变结果</small></div>
+                    <div className="prediction-metrics">
+                      <span><small>开发总成本</small><b>{formatCash(planPrediction.cost)}</b><em>现金 {Math.round(planPrediction.cashRatio * 100)}%</em></span>
+                      <span><small>常规周期</small><b>{planPrediction.durationWeeks.min}–{planPrediction.durationWeeks.max} 周</b><em>含预计除错</em></span>
+                      <span><small>品质倾向</small><b>{planPrediction.qualityLevel}</b><em>{planPrediction.qualityRange.min}–{planPrediction.qualityRange.max}</em></span>
+                      <span><small>现金 / 风险</small><b>{planPrediction.cashPressure} / {planPrediction.riskLevel}</b><em>确认前检查</em></span>
+                      <span><small>平台市场</small><b>{planPrediction.marketLevel} · {formatUsers(planPrediction.marketUsers)}</b><em>{planPrediction.platformYearsRemaining === null ? "长期运营" : `剩余 ${planPrediction.platformYearsRemaining} 年`}</em></span>
+                      <span><small>核心受众</small><b>{planPrediction.audience}</b><em>{planPrediction.audienceChanges.join(" · ")}</em></span>
+                    </div>
+                    <div className="prediction-factors">
+                      <div><b>预期优势</b>{planPrediction.advantages.map((factor) => <span className={`is-${factor.tone}`} key={factor.text}>＋ {factor.text}</span>)}</div>
+                      <div><b>主要风险</b>{planPrediction.risks.map((factor) => <span className={`is-${factor.tone}`} key={factor.text}>！ {factor.text}</span>)}</div>
+                    </div>
+                  </section>
+                )}
                 <button className="primary-button" onClick={startGame}>
                   {remainingDirectionPoints > 0 ? `分配剩余 ${remainingDirectionPoints} 点` : `通过企划 · ${formatCash(selectedDevelopmentCost)}`}
                 </button>
@@ -295,6 +330,10 @@ export function GameModals({
               <div className="console-spec-summary">
                 <span><small>综合性能</small><b>×{selectedConsoleSpec.performance.toFixed(2)}</b></span>
                 <span><small>研发预算</small><b>{formatCash(selectedConsoleSpec.cost)}</b></span>
+                <span><small>预计周期</small><b>{consolePrediction.durationWeeks.min}–{consolePrediction.durationWeeks.max} 周</b></span>
+                <span><small>初期用户</small><b>{formatUsers(consolePrediction.userRange.min)}–{formatUsers(consolePrediction.userRange.max)}</b></span>
+                <span><small>工程门槛</small><b>{hardwareEngineerCount} 名工程师</b></span>
+                <span><small>现金压力</small><b>{Math.round(consolePrediction.cashRatio * 100)}%</b></span>
               </div>
               <button className="primary-button" onClick={startConsoleProject}>确认规格 · 开始研发</button>
             </div>
@@ -315,21 +354,35 @@ export function GameModals({
             </div>
             <div className="lead-grid">
               {staff.map((member) => {
-                const skillKey = STAGE_INFO[project.stage ?? "planning"].skill;
-                const skill = member[skillKey];
+                const prediction = predictStageLead(game, project, member);
                 return (
-                  <button key={member.id} onClick={() => assignStageLead(member)}>
+                  <button className={`lead-choice is-${prediction.contributionLevel}`} key={member.id} onClick={() => assignStageLead(member)}>
                     <StaffAvatar staff={member} className="mini-avatar" />
-                    <span><b>{member.name}</b><small>{member.role} · 体力 {Math.round(member.energy)}% · Power {member.maxPower}</small></span>
-                    <strong>{skillKey === "code" ? "程序" : skillKey === "scenario" ? "剧本" : skillKey === "art" ? "画面" : "音乐"} {skill}</strong>
+                    <span>
+                      <b>{member.name}<em>{prediction.contributionLevel}</em></b>
+                      <small>{member.role} · {prediction.roleFit} · 体力 {Math.round(member.energy)}%{prediction.mayRest ? " · 可能中途休息" : ""}</small>
+                      <small>单轮品质 {prediction.qualityRange.min.toFixed(1)}–{prediction.qualityRange.max.toFixed(1)} · {prediction.gapToBest > 0 ? `比最佳低 ${prediction.gapToBest.toFixed(1)}` : "团队最佳"}</small>
+                      {prediction.repeated && <small className="lead-warning">上次同阶段负责人 · 能力 -{prediction.repeatPenalty}%</small>}
+                    </span>
+                    <strong>{prediction.skillLabel} {prediction.effectiveSkill.toFixed(1)}</strong>
                   </button>
                 );
               })}
-              <button className="external-lead" onClick={hireExternalLead}>
-                <UiIcon index={20} className="external-star" />
-                <span><b>邀请外聘名人</b><small>能力出众，不消耗员工体力</small></span>
-                <strong>{formatCash(900 + STAGE_ORDER.indexOf(project.stage ?? "planning") * 350)}</strong>
-              </button>
+              {(() => {
+                const prediction = predictExternalLead(game, project);
+                return (
+                  <button className="external-lead" onClick={hireExternalLead} disabled={game.cash < prediction.cost}>
+                    <UiIcon index={20} className="external-star" />
+                    <span>
+                      <b>邀请外聘名人<em>{prediction.contributionLevel}</em></b>
+                      <small>专业外援 · 不消耗内部员工体力</small>
+                      <small>单轮品质 {prediction.qualityRange.min.toFixed(1)}–{prediction.qualityRange.max.toFixed(1)}</small>
+                      {prediction.repeated && <small className="lead-warning">上次同阶段也使用外援 · 能力 -{prediction.repeatPenalty}%</small>}
+                    </span>
+                    <strong>{formatCash(prediction.cost)}</strong>
+                  </button>
+                );
+              })()}
             </div>
           </ModalShell>
         )}
@@ -338,20 +391,24 @@ export function GameModals({
           <ModalShell title="承接外包" onClose={closeModal}>
             <p className="modal-intro">没有制作新作时，可以用外包赚取资金和研究点。</p>
             <div className="list-cards">
-              {CONTRACTS.map((contract) => (
-                <button key={contract.name} onClick={() => startContract(contract)} disabled={Boolean(project) || companyLevel < contract.level}>
-                  <UiIcon index={1} className="list-icon contract-icon" />
-                  <span>
-                    <b>{contract.name}</b>
-                    <small>
-                      {companyLevel < contract.level
-                        ? `第 ${contract.level} 阶段办公室解锁`
-                        : `限期 ${contract.deadline} 周 · ${Object.entries(contract.requirements).map(([key, value]) => `${CONTRACT_QUALITY_LABELS[key as keyof typeof CONTRACT_QUALITY_LABELS]} ${value}`).join(" · ")}`}
-                    </small>
-                  </span>
-                  <strong>{formatCash(contract.reward)}</strong>
-                </button>
-              ))}
+              {CONTRACTS.map((contract) => {
+                const prediction = predictContract(game, contract);
+                return (
+                  <button key={contract.name} onClick={() => startContract(contract)} disabled={Boolean(project) || companyLevel < contract.level}>
+                    <UiIcon index={1} className="list-icon contract-icon" />
+                    <span>
+                      <b>{contract.name}</b>
+                      <small>
+                        {companyLevel < contract.level
+                          ? `第 ${contract.level} 阶段办公室解锁`
+                          : `限期 ${contract.deadline} 周 · ${Object.entries(contract.requirements).map(([key, value]) => `${CONTRACT_QUALITY_LABELS[key as keyof typeof CONTRACT_QUALITY_LABELS]} ${value}`).join(" · ")}`}
+                      </small>
+                      {companyLevel >= contract.level && <small>团队产能 {prediction.teamPower} · 预计 {prediction.durationWeeks.min}–{prediction.durationWeeks.max} 周 · 逾期风险 {prediction.risk}</small>}
+                    </span>
+                    <strong>{formatCash(contract.reward)}</strong>
+                  </button>
+                );
+              })}
             </div>
           </ModalShell>
         )}
@@ -393,11 +450,17 @@ export function GameModals({
             </div>
             <div className="training-list">
               {TRAINING_METHODS.map((method) => {
-                const used = selectedStaff.training?.[method.id] ?? 0;
+                const prediction = predictTraining(selectedStaff, method, unlockedThemes);
+                const statLabels = { code: "程序", scenario: "剧本", art: "画面", sound: "音乐" };
                 return (
-                  <button key={method.id} onClick={() => runTraining(method)}>
+                  <button key={method.id} onClick={() => runTraining(method)} disabled={cash < method.cost || selectedStaff.energy < method.energy}>
                     <UiIcon index={18} className="training-icon" />
-                    <span><b>{method.name}</b><small>{method.note} · 体力 -{method.energy} · 已训练 {used} 次</small></span>
+                    <span>
+                      <b>{method.name}</b>
+                      <small>{method.note} · 体力 -{method.energy} · 已训练 {prediction.used} 次 · 效果 {Math.round(prediction.multiplier * 100)}%</small>
+                      <small>基础提升 {prediction.gains.map((gain) => `${statLabels[gain.key]} +${gain.min}`).join(" · ")} · 超级培训最高 {prediction.gains.map((gain) => `${statLabels[gain.key]} +${gain.max}`).join(" · ")}</small>
+                      <small className={prediction.willDiscover ? "training-discovery is-ready" : "training-discovery"}>{prediction.willDiscover ? `本次可发现“${method.unlock.name}”` : prediction.discovery}</small>
+                    </span>
                     <strong>{formatCash(method.cost)}</strong>
                   </button>
                 );
@@ -445,11 +508,22 @@ export function GameModals({
           <ModalShell title="道具箱" onClose={() => setModal("marketing")}>
             <p className="modal-intro">开发增益连续使用会衰减并消耗研究点；活力汽水可随时使用。</p>
             <div className="shop-grid inventory-grid">
-              {SHOP_ITEMS.map((item) => (
-                <button key={item.key} onClick={() => applyItem(item.key)} disabled={inventory[item.key] < 1}>
-                  <UiIcon index={item.iconIndex} className="shop-icon" /><span><b>{item.name}</b><small>{item.note}</small></span><strong>持有 {inventory[item.key]}</strong>
-                </button>
-              ))}
+              {SHOP_ITEMS.map((item) => {
+                const prediction = predictItemUse(game, item.key);
+                const needsProject = item.key !== "energyDrink";
+                const disabled = inventory[item.key] < 1 || (needsProject && project?.kind !== "game") || research < prediction.researchCost;
+                return (
+                  <button key={item.key} onClick={() => applyItem(item.key)} disabled={disabled}>
+                    <UiIcon index={item.iconIndex} className="shop-icon" />
+                    <span>
+                      <b>{item.name}</b>
+                      <small>{prediction.target} {item.key === "bugSpray" ? "-" : "+"}{prediction.amount} · 研究 -{prediction.researchCost} · 效果 {Math.round(prediction.multiplier * 100)}%</small>
+                      {needsProject && project?.kind !== "game" && <small className="item-warning">仅在游戏开发中生效</small>}
+                    </span>
+                    <strong>持有 {inventory[item.key]}</strong>
+                  </button>
+                );
+              })}
             </div>
           </ModalShell>
         )}
@@ -480,13 +554,21 @@ export function GameModals({
               <button onClick={() => setModal("items")}>道具箱 · {Object.values(inventory).reduce((sum, value) => sum + value, 0)}</button>
             </div>
             <div className="list-cards marketing-list">
-              {ADVERTISING_METHODS.filter((item) => companyLevel >= item.level).map((item) => (
-                <button key={item.name} onClick={() => advertise(item.cost, item.hype, item.name, item.segment)}>
-                  <UiIcon index={3} className="list-icon ad-icon" />
-                  <span><b>{item.name}</b><small>{item.note} · 热度 +{item.hype}</small></span>
-                  <strong>{formatCash(item.cost)}</strong>
-                </button>
-              ))}
+              {ADVERTISING_METHODS.filter((item) => companyLevel >= item.level).map((item) => {
+                const prediction = predictMarketing(game, item);
+                const segmentLabels: Record<keyof FanSegments, string> = { kids: "儿童", teens: "青少年", adults: "成人", seniors: "银发族", male: "男性", female: "女性" };
+                return (
+                  <button key={item.name} onClick={() => advertise(item.cost, item.hype, item.name, item.segment)} disabled={cash < item.cost || (!project && !releases[0])}>
+                    <UiIcon index={3} className="list-icon ad-icon" />
+                    <span>
+                      <b>{item.name}</b>
+                      <small>{item.note} · 有效热度 +{prediction.effectiveHype} · {segmentLabels[item.segment]} +{prediction.segmentGain}</small>
+                      <small>{prediction.target}{prediction.previousUses > 0 ? ` · 第 ${prediction.previousUses + 1} 次投放，效果 ${Math.round(prediction.multiplier * 100)}%` : " · 首次投放无衰减"}</small>
+                    </span>
+                    <strong>{formatCash(item.cost)}</strong>
+                  </button>
+                );
+              })}
             </div>
           </ModalShell>
         )}
@@ -539,6 +621,17 @@ export function GameModals({
           </ModalShell>
         )}
 
+        {modal === "result" && resultData && (
+          <ModalShell title={resultData.title} onClose={closeModal}>
+            <div className="operation-result">
+              <UiIcon index={20} className="result-badge" />
+              <p>{resultData.summary}</p>
+              <ResultEntries entries={resultData.entries} />
+              <button className="primary-button" onClick={closeModal}>确认变化</button>
+            </div>
+          </ModalShell>
+        )}
+
         {modal === "event" && eventData && (
           <ModalShell title={eventData.title} onClose={closeModal}>
             <div className={`event-sheet event-${eventData.kind}`}>
@@ -552,6 +645,7 @@ export function GameModals({
               <h2>{eventData.headline}</h2>
               <p>{eventData.body}</p>
               {eventData.reward && <strong className="event-reward">{eventData.reward}</strong>}
+              {eventData.results && <ResultEntries entries={eventData.results} />}
               {eventData.kind === "expo" ? (
                 <div className="expo-options">
                   <button onClick={() => attendExpo(0, 0, 0, "参观展会")}><b>仅参观</b><small>免费 · 了解行业动向</small></button>
@@ -583,6 +677,7 @@ export function GameModals({
                 <span>业界口碑 <b>{review.reputationChange >= 0 ? "+" : ""}{review.reputationChange}</b></span>
                 <span>开发经验 <b>{review.growth}</b></span>
               </div>
+              {review.results && <ResultEntries entries={review.results} />}
               <button className="primary-button" onClick={closeModal}>太棒了！</button>
             </div>
           </ModalShell>

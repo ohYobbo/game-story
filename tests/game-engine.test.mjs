@@ -5,6 +5,7 @@ import { STAGE_INFO } from "../app/game/data.ts";
 import { applyGameAction } from "../app/game/engine.ts";
 import {
   createInitialGameState,
+  formatCash,
   getAvailablePlatforms,
   getStageTarget,
 } from "../app/game/rules.ts";
@@ -235,6 +236,45 @@ test("marketing, items and career changes preserve their edge rules", () => {
   );
   assert.equal(result.state.careerManuals, 0);
   assert.equal(result.state.staff[0].role, "硬件工程师");
+});
+
+test("unified result entries report committed state deltas", () => {
+  const initial = {
+    ...createInitialGameState(),
+    cash: 5_000,
+    project: gameProject({ hype: 0, bugs: 4 }),
+    inventory: {
+      funBoost: 0,
+      creativityBoost: 0,
+      graphicsBoost: 0,
+      soundBoost: 0,
+      bugSpray: 1,
+      energyDrink: 0,
+    },
+  };
+  let result = applyGameAction(initial, {
+    type: "apply-marketing",
+    name: "网络广告",
+    cost: 50,
+    hype: 8,
+    segment: "teens",
+  });
+  let feedback = result.effects.find((effect) => effect.type === "result").result;
+  assert.equal(feedback.entries.find((entry) => entry.label === "资金").value, `-${formatCash(initial.cash - result.state.cash)}`);
+  assert.equal(feedback.entries.find((entry) => entry.label === "作品热度").value, `+${result.state.project.hype - initial.project.hype}`);
+
+  result = applyGameAction(initial, { type: "use-item", key: "bugSpray" });
+  feedback = result.effects.find((effect) => effect.type === "result").result;
+  assert.equal(feedback.entries.find((entry) => entry.label === "漏洞").value, `-${initial.project.bugs - result.state.project.bugs}`);
+
+  const contract = { ...gameProject(), kind: "contract", reward: 100 };
+  result = applyGameAction(
+    { ...initial, reputation: 100, project: contract },
+    { type: "complete-project", project: contract },
+  );
+  const event = result.effects.find((effect) => effect.type === "event").event;
+  assert.equal(event.results.find((entry) => entry.label === "业界口碑").value, "+0");
+  assert.equal(result.state.reputation, 100);
 });
 
 test("a sequel completion consumes the predecessor slot and can enter the Hall of Fame", () => {

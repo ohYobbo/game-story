@@ -11,12 +11,13 @@ import {
 } from "../app/game/save.ts";
 
 test("serialized saves contain explicit versions and no transient UI state", () => {
-  const serialized = serializeGameState(createInitialGameState());
+  const state = { ...createInitialGameState(), lastStageLeads: { planning: 1 } };
+  const serialized = serializeGameState(state);
   assert.equal(serialized.schemaVersion, SAVE_SCHEMA_VERSION);
   assert.equal(serialized.balanceVersion, BALANCE_VERSION);
   assert.ok(!("modal" in serialized));
   assert.ok(!("animation" in serialized));
-  assert.deepEqual(parseSave(JSON.stringify(serialized)), createInitialGameState());
+  assert.deepEqual(parseSave(JSON.stringify(serialized)), state);
 });
 
 test("legacy staff and stage-less game projects migrate to a resumable state", () => {

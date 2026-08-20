@@ -126,6 +126,35 @@ export function getDebugGain(stagePower: number, energyModifier: number, randomV
   return (stagePower / 10) * energyModifier * (0.8 + randomValue * 0.4);
 }
 
+export function getGeneralProjectGain(
+  totalPower: number,
+  speedModifier: number,
+  energyModifier: number,
+  randomValue: number,
+) {
+  return (totalPower / 22) * speedModifier * energyModifier * (0.85 + randomValue * 0.3);
+}
+
+export function getGeneralQualityGain(totalPower: number, qualityModifier: number) {
+  return (totalPower / 105) * qualityModifier;
+}
+
+export function getConsoleInitialUsers(
+  fans: number,
+  totalPower: number,
+  performance: number,
+) {
+  return Math.round((260_000 + fans * 110 + totalPower * 850) * performance);
+}
+
+export function getRepeatedUseMultiplier(uses: number, decay: number, floor: number) {
+  return Math.max(floor, 1 - uses * decay);
+}
+
+export function getLeadRepeatMultiplier(isRepeat: boolean) {
+  return isRepeat ? 0.82 : 1;
+}
+
 export function getReviewBase(qualities: Pick<{ fun: number; creativity: number; graphics: number; sound: number }, "fun" | "creativity" | "graphics" | "sound">) {
   return (qualities.fun + qualities.creativity + qualities.graphics + qualities.sound) / 32;
 }

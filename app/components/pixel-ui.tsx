@@ -3,7 +3,7 @@
 import { useEffect, useRef, type CSSProperties, type ReactNode } from "react";
 
 import { WORKER_BEHAVIORS, WORKER_BEHAVIOR_ROWS } from "../game/data";
-import type { Project, Staff, WorkerBehavior } from "../game/types";
+import type { Project, ResultEntry, Staff, WorkerBehavior } from "../game/types";
 
 const atlasPosition = (index: number, count: number) =>
   `${(index / Math.max(1, count - 1)) * 100}%`;
@@ -52,6 +52,21 @@ export function StaffAvatar({
       style={{ "--sprite-x": atlasPosition(column, 4) } as CSSProperties}
       aria-hidden="true"
     />
+  );
+}
+
+export function ResultEntries({ entries }: { entries: ResultEntry[] }) {
+  const iconByCategory = { resource: 22, quality: 20, risk: 23 };
+  return (
+    <div className="result-entries" aria-label="实际变化">
+      {entries.map((entry, index) => (
+        <div className={`result-entry is-${entry.tone}`} key={`${entry.label}-${index}`}>
+          <UiIcon index={iconByCategory[entry.category]} />
+          <span><small>{entry.label}</small><b>{entry.value}</b>{entry.detail && <em>{entry.detail}</em>}</span>
+          <i aria-hidden="true">{entry.tone === "positive" ? "＋" : entry.tone === "negative" ? "−" : "·"}</i>
+        </div>
+      ))}
+    </div>
   );
 }
 

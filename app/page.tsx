@@ -3,11 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
-  COMBO_STARTING_BONUS,
   OFFICE_UPGRADE_COSTS,
   getCareerOptionsFor,
-  getContentPopularity,
-  getDevelopmentCost,
   getLevelUpCost,
   getNextSalary,
 } from "./game-balance";
@@ -21,7 +18,6 @@ import {
   DEFAULT_DIRECTION_POINTS,
   DIRECTIONS,
   GENRES,
-  GREAT_COMBOS,
   HIRING_METHODS,
   PLATFORMS,
   ROLE_LEVEL_BOOSTS,
@@ -36,12 +32,15 @@ import {
   clamp,
   formatCash,
   getAvailablePlatforms,
-  getDirectionBoosts,
-  getDirectionConfig,
   getKnowledgeLevel,
   getOfficeCapacity,
-  getStageTarget,
 } from "./game/rules";
+import {
+  predictConsole,
+  predictEarlyRelease,
+  predictExternalLead,
+  predictGamePlan,
+} from "./game/predictions";
 import { parseSave, SAVE_STORAGE_KEY, serializeGameState } from "./game/save";
 import { useGameController } from "./game/use-game-controller";
 import type { EngineEffect } from "./game/engine";
@@ -53,6 +52,7 @@ import type {
   Inventory,
   Modal,
   Project,
+  ResultData,
   ReviewData,
   Staff,
 } from "./game/types";
@@ -87,7 +87,6 @@ export default function Home() {
     ownConsole,
     consoleUsers,
     genreExperience,
-    themeExperience,
     unlockedGenres,
     careerManuals,
     merchantYear,
@@ -110,6 +109,7 @@ export default function Home() {
   const [selectedSequelName, setSelectedSequelName] = useState("");
   const [review, setReview] = useState<ReviewData | null>(null);
   const [eventData, setEventData] = useState<EventData | null>(null);
+  const [resultData, setResultData] = useState<ResultData | null>(null);
   const tickRef = useRef(0);
 
   useEffect(() => {
@@ -146,13 +146,30 @@ export default function Home() {
   const directionPointBudget = 8 + (selectedGenreLevel >= 2 ? 2 : 0) + (selectedGenreLevel >= 5 ? 2 : 0);
   const spentDirectionPoints = Object.values(selectedDirectionPoints).reduce((sum, value) => sum + value, 0);
   const remainingDirectionPoints = directionPointBudget - spentDirectionPoints;
-  const selectedDirectionConfig = getDirectionConfig(selectedDirection);
-  const selectedDevelopmentCost = getDevelopmentCost(
-    availablePlatforms.find((item) => item.name === selectedPlatform)?.cost ?? 0,
-    selectedGenre,
-    selectedTheme,
-    selectedDirectionConfig.cost,
+  const selectedSequel = releases.find((item) => item.name === selectedSequelName && item.sequelEligible);
+  const selectedGameGenre = selectedSequel?.genre ?? selectedGenre;
+  const selectedGameTheme = selectedSequel?.theme ?? selectedTheme;
+  const selectedPlatformData = availablePlatforms.find((item) => item.name === selectedPlatform) ?? availablePlatforms[0];
+  const planPrediction = useMemo(() => selectedPlatformData
+    ? predictGamePlan({
+        state: game,
+        name: gameName,
+        platform: selectedPlatformData,
+        genre: selectedGameGenre,
+        theme: selectedGameTheme,
+        direction: selectedDirection,
+        directionPoints: selectedDirectionPoints,
+        sequel: selectedSequel,
+      })
+    : null, [game, gameName, selectedPlatformData, selectedGameGenre, selectedGameTheme, selectedDirection, selectedDirectionPoints, selectedSequel]);
+  const selectedDevelopmentCost = planPrediction?.cost ?? 0;
+  const consolePrediction = useMemo(
+    () => predictConsole(game, selectedConsoleSpec.performance, selectedConsoleSpec.cost),
+    [game, selectedConsoleSpec],
   );
+  const earlyReleasePrediction = project?.kind === "game" && project.stage === "debug"
+    ? predictEarlyRelease(game, project)
+    : null;
   const activeStage = project?.kind === "game" ? (project.stage ?? "coding") : null;
   const projectPercent = project
     ? project.kind === "game"
@@ -201,6 +218,11 @@ export default function Home() {
       if (effect.type === "review") {
         setReview(effect.review);
         setModal("review");
+      }
+      if (effect.type === "result") {
+        setResultData(effect.result);
+        setPaused(true);
+        setModal("result");
       }
     }
   }, [announce]);
@@ -277,50 +299,14 @@ export default function Home() {
   };
 
   const startGame = () => {
-    const platform = availablePlatforms.find((item) => item.name === selectedPlatform) ?? availablePlatforms[0];
-    if (!platform) return announce("目前没有可用平台");
+    if (!selectedPlatformData || !planPrediction) return announce("目前没有可用平台");
     if (project) return announce("当前项目完成后才能开发新作");
     if (remainingDirectionPoints > 0) return announce(`还有 ${remainingDirectionPoints} 点开发方向尚未分配`);
     if (cash < selectedDevelopmentCost) return announce("资金不足，先接一份外包吧");
-    const sequel = releases.find((item) => item.name === selectedSequelName && item.sequelEligible);
-    const gameGenre = sequel?.genre ?? selectedGenre;
-    const gameTheme = sequel?.theme ?? selectedTheme;
-    const isGreatCombo = GREAT_COMBOS.has(`${gameGenre}|${gameTheme}`);
-    const comboBoost = isGreatCombo ? COMBO_STARTING_BONUS : 0;
-    const sequelBoost = sequel ? 7 + Math.floor(sequel.score / 8) : 0;
-    const masteryBoost = getKnowledgeLevel(genreExperience[gameGenre] ?? 0) + getKnowledgeLevel(themeExperience[gameTheme] ?? 0) - 2;
-    const directionBoosts = getDirectionBoosts(selectedDirectionPoints);
     dispatchGame({
       type: "start-project",
       cost: selectedDevelopmentCost,
-      project: {
-        kind: "game",
-        name: gameName.trim() || "无名游戏",
-        platform: selectedPlatform,
-        genre: gameGenre,
-        theme: gameTheme,
-        direction: selectedDirection,
-        progress: 0,
-        target: Math.round(270 * selectedDirectionConfig.target),
-        fun: 6 + comboBoost + masteryBoost + sequelBoost + directionBoosts.fun,
-        creativity: 5 + comboBoost + masteryBoost + sequelBoost + directionBoosts.creativity,
-        graphics: 4 + Math.floor(masteryBoost / 2) + sequelBoost + directionBoosts.graphics,
-        sound: 3 + Math.floor(masteryBoost / 2) + sequelBoost + directionBoosts.sound,
-        bugs: 0,
-        hype: 2 + directionBoosts.hype,
-        marketUsers: platform.users,
-        stage: "planning",
-        stageProgress: 0,
-        stageTarget: getStageTarget("planning", selectedDirection),
-        elapsedWeeks: 0,
-        sequelOf: sequel?.name,
-        itemUses: 0,
-        eventCount: 0,
-        directionPoints: selectedDirectionPoints,
-        contentPopularity: getContentPopularity(gameGenre, gameTheme, isGreatCombo),
-        debugResearch: 0,
-        developmentCost: selectedDevelopmentCost,
-      },
+      project: planPrediction.project,
     });
     setSelectedSequelName("");
     setSelectedDirectionPoints(DEFAULT_DIRECTION_POINTS);
@@ -354,15 +340,13 @@ export default function Home() {
     if (!project || project.kind !== "game" || project.stage === "debug") return;
     const stage = project.stage ?? "planning";
     const stageInfo = STAGE_INFO[stage];
-    const bestInternal = Math.max(...staff.map((member) => member[stageInfo.skill]));
-    const stageIndex = STAGE_ORDER.indexOf(stage);
-    const cost = 15 + stageIndex * 20;
-    if (cash < cost) return announce("资金不足，无法邀请外部专家");
+    const prediction = predictExternalLead(game, project);
+    if (cash < prediction.cost) return announce("资金不足，无法邀请外部专家");
     dispatchGame({
       type: "choose-lead",
       leadName: "外聘名人",
-      leadSkill: bestInternal + 6 + stageIndex * 2,
-      cost,
+      leadSkill: prediction.rawSkill,
+      cost: prediction.cost,
     });
     closeModal();
     announce(`外部专家加入${stageInfo.label}`);
@@ -559,7 +543,6 @@ export default function Home() {
     const result = dispatchGame({ type: "attend-expo", cost, gainedFans, gainedHype, label });
     applyEngineEffects(result.effects);
     if (result.state.cash === cash && cost > 0) return;
-    closeModal();
   };
 
   const expandOffice = () => {
@@ -600,6 +583,7 @@ export default function Home() {
           toast={toast}
           projectPercent={projectPercent}
           chartLeader={chartLeader}
+          earlyReleasePrediction={earlyReleasePrediction}
           onOpenMenu={openMenu}
           onForceRelease={forceRelease}
           onSave={saveGame}
@@ -615,6 +599,9 @@ export default function Home() {
           announce={announce}
           eventData={eventData}
           review={review}
+          resultData={resultData}
+          planPrediction={planPrediction}
+          consolePrediction={consolePrediction}
           selectedStaff={selectedStaff}
           availablePlatforms={availablePlatforms}
           sequelCandidates={sequelCandidates}

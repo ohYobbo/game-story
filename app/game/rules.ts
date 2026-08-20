@@ -117,6 +117,22 @@ export function getAudience(
   return { label: "家庭・全年龄", gains: { kids: 6, seniors: 7, female: 5, male: 3 } };
 }
 
+export function getDirectionAudienceGains(
+  points: DirectionPoints,
+  scale = 1,
+): FanSegments {
+  return {
+    kids: Math.round((points.cuteness + points.approachability) * scale),
+    teens: Math.round(points.niche * 1.4 * scale),
+    adults: Math.round(points.realism * scale),
+    seniors: Math.round(points.simplicity * scale),
+    male: Math.round((points.realism + points.innovation) * .6 * scale),
+    female: Math.round(
+      (points.cuteness + points.approachability) * .6 * scale,
+    ),
+  };
+}
+
 export function getStageTarget(stage: ProductionStage, direction: string) {
   return Math.round(STAGE_TARGETS[stage] * getDirectionConfig(direction).target);
 }
@@ -180,6 +196,7 @@ export function createInitialGameState(): GameState {
     merchantYear: 0,
     merchantPurchases: 0,
     industryNews: "小型工作室“像素工坊”正式成立！",
+    lastStageLeads: {},
   };
 }
 

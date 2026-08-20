@@ -49,6 +49,22 @@ export type FanSegments = {
   female: number;
 };
 
+export type ResultTone = "positive" | "negative" | "neutral";
+
+export type ResultEntry = {
+  category: "resource" | "quality" | "risk";
+  label: string;
+  value: string;
+  tone: ResultTone;
+  detail?: string;
+};
+
+export type ResultData = {
+  title: string;
+  summary: string;
+  entries: ResultEntry[];
+};
+
 export type ConsoleSpec = {
   cpu: string;
   media: string;
@@ -156,6 +172,7 @@ export type GameState = {
   merchantYear: number;
   merchantPurchases: number;
   industryNews: string;
+  lastStageLeads: Partial<Record<ProductionStage, number | "external">>;
 };
 
 export type SaveState = GameState & {
@@ -184,6 +201,7 @@ export type EventData = {
   headline: string;
   body: string;
   reward?: string;
+  results?: ResultEntry[];
 };
 
 export type ReviewData = {
@@ -195,6 +213,7 @@ export type ReviewData = {
   reputationChange: number;
   growth: string;
   salesRank: number;
+  results?: ResultEntry[];
 };
 
 export type Modal =
@@ -211,6 +230,7 @@ export type Modal =
   | "records"
   | "review"
   | "event"
+  | "result"
   | "stage"
   | null;
 

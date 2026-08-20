@@ -183,12 +183,24 @@ test("wires the complete generated pixel-art system into the product", async () 
     "hire",
     "marketing",
     "records",
+    "result",
     "event",
     "review",
   ]) {
     assert.match(components, new RegExp('modal === "' + modal + '"'));
   }
-  assert.equal(components.match(/<ModalShell/g)?.length, 14);
+  assert.equal(components.match(/<ModalShell/g)?.length, 15);
+  for (const feedback of [
+    "企划确认摘要",
+    "常规周期",
+    "上次同阶段负责人",
+    "逾期风险",
+    "有效热度",
+    "提前发售",
+    "ResultEntries",
+  ]) {
+    assert.match(components, new RegExp(feedback));
+  }
   assert.match(styles, /url\("\/pixel-studio-night-bg\.png"\)/);
   assert.match(styles, /url\("\/game-ui\/office-levels-atlas\.png"\)/);
   assert.match(styles, /url\("\/game-ui\/character-behaviors-atlas\.png"\)/);

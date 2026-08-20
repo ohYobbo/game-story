@@ -1,6 +1,7 @@
 "use client";
 
 import { CONTRACT_QUALITY_LABELS, STAGE_INFO, STAGE_ORDER } from "../game/data";
+import type { EarlyReleasePrediction } from "../game/predictions";
 import { formatCash } from "../game/rules";
 import type { GameState, Modal, Project, Release } from "../game/types";
 import { PixelPerson, UiIcon, getWorkerBehavior } from "./pixel-ui";
@@ -79,11 +80,13 @@ export function NewsStrip({
 export function ProjectConsole({
   project,
   projectPercent,
+  earlyReleasePrediction,
   onForceRelease,
   onOpenMenu,
 }: {
   project: Project | null;
   projectPercent: number;
+  earlyReleasePrediction: EarlyReleasePrediction | null;
   onForceRelease: () => void;
   onOpenMenu: OpenMenu;
 }) {
@@ -120,8 +123,11 @@ export function ProjectConsole({
               </div>
               {project.stage === "debug" && (
                 <div className="debug-strip">
-                  <span>全员除错中 · 剩余 {Math.ceil(project.bugs)} 个漏洞</span>
-                  <button onClick={onForceRelease}>带漏洞发售</button>
+                  <span>
+                    全员除错中 · 剩余 {Math.ceil(project.bugs)} 个漏洞
+                    {earlyReleasePrediction && <small>提前发售：评分 {earlyReleasePrediction.scoreRange.min}–{earlyReleasePrediction.scoreRange.max}/40 · 首周 {earlyReleasePrediction.salesRange.min.toLocaleString()}–{earlyReleasePrediction.salesRange.max.toLocaleString()} 套 · {earlyReleasePrediction.reputationRisk}</small>}
+                  </span>
+                  <button onClick={onForceRelease}>承担风险发售</button>
                 </div>
               )}
             </>
@@ -184,6 +190,7 @@ export function GameDashboard({
   toast,
   projectPercent,
   chartLeader,
+  earlyReleasePrediction,
   onOpenMenu,
   onForceRelease,
   onSave,
@@ -198,6 +205,7 @@ export function GameDashboard({
   toast: string;
   projectPercent: number;
   chartLeader?: Release;
+  earlyReleasePrediction: EarlyReleasePrediction | null;
   onOpenMenu: OpenMenu;
   onForceRelease: () => void;
   onSave: () => void;
@@ -210,7 +218,7 @@ export function GameDashboard({
       <TopHud year={game.year} month={game.month} week={game.week} cash={game.cash} />
       <OfficeView companyLevel={game.companyLevel} staff={game.staff} project={game.project} fans={game.fans} research={game.research} />
       <NewsStrip industryNews={game.industryNews} chartLeader={chartLeader} />
-      <ProjectConsole project={game.project} projectPercent={projectPercent} onForceRelease={onForceRelease} onOpenMenu={onOpenMenu} />
+      <ProjectConsole project={game.project} projectPercent={projectPercent} earlyReleasePrediction={earlyReleasePrediction} onForceRelease={onForceRelease} onOpenMenu={onOpenMenu} />
       <BottomMenu modal={modal} onOpenMenu={onOpenMenu} />
       <div className="utility-row">
         <button onClick={onSave}>保存</button>
