@@ -9,7 +9,6 @@ import {
   getFirstWeekSales,
   getGeneralProjectGain,
   getGeneralQualityGain,
-  getLeadRepeatMultiplier,
   getQualityGain,
   getReleaseFatigueMultiplier,
   getReviewScores,
@@ -22,6 +21,7 @@ import {
   HIRING_CANDIDATES,
   HIRING_METHODS,
   PLATFORMS,
+  STAGE_INFO,
   STAGE_ORDER,
   TRAINING_METHODS,
 } from "./data.ts";
@@ -39,9 +39,11 @@ import {
   getStageTarget,
 } from "./rules.ts";
 import {
+  CONTINUOUS_LEAD_MULTIPLIER,
   predictItemUse,
   predictMarketing,
   predictTraining,
+  rollStageLeadOpening,
 } from "./predictions.ts";
 import type {
   EventData,
@@ -52,6 +54,7 @@ import type {
   RandomSource,
   ResultData,
   ReviewData,
+  StageCreationData,
 } from "./types";
 
 export type EngineEffect =
@@ -59,7 +62,8 @@ export type EngineEffect =
   | { type: "review"; review: ReviewData }
   | { type: "toast"; message: string }
   | { type: "result"; result: ResultData }
-  | { type: "pause-for-stage" };
+  | { type: "pause-for-stage"; stage: Exclude<NonNullable<Project["stage"]>, "debug"> }
+  | { type: "stage-creation"; creation: StageCreationData };
 
 export type EngineResult = {
   state: GameState;
@@ -479,14 +483,14 @@ function advanceProject(
     const stagePower = getStageTeamPower(staffBeforeTick, stage);
     const gain = getDevelopmentGain(
       stagePower,
-      leadSkill,
+      leadSkill * CONTINUOUS_LEAD_MULTIPLIER,
       directionConfig.speed,
       energyModifier,
       random(),
     );
     const qualityGain = getQualityGain(
       stagePower,
-      leadSkill,
+      leadSkill * CONTINUOUS_LEAD_MULTIPLIER,
       directionConfig.quality,
       random(),
     );
@@ -607,7 +611,7 @@ function advanceProject(
           leadName: undefined,
           leadSkill: undefined,
         };
-        effects.push({ type: "pause-for-stage" });
+        effects.push({ type: "pause-for-stage", stage: nextStage });
       }
     }
     return {
@@ -1195,6 +1199,149 @@ function changeCareer(
   };
 }
 
+function chooseStageLead(
+  state: GameState,
+  action: Extract<GameAction, { type: "choose-lead" }>,
+  random: RandomSource,
+): EngineResult {
+  const current = state.project;
+  if (!current || current.kind !== "game" || current.stage === "debug" || current.leadName) {
+    return noEffects(state);
+  }
+  const stage = (current.stage ?? "planning") as Exclude<NonNullable<Project["stage"]>, "debug">;
+  const stageInfo = STAGE_INFO[stage];
+  const member = action.leadStaffId
+    ? state.staff.find((item) => item.id === action.leadStaffId)
+    : undefined;
+  if (action.leadStaffId && (!member || member.resting || member.energy <= 10)) {
+    return {
+      state,
+      effects: [{ type: "toast", message: "这名员工正在休息，暂时无法担任负责人" }],
+    };
+  }
+  const cost = action.cost ?? 0;
+  if (state.cash < cost) {
+    return {
+      state,
+      effects: [{ type: "toast", message: "资金不足，无法邀请外部专家" }],
+    };
+  }
+  const identity = member?.id ?? "external";
+  const rawSkill = member ? member[stageInfo.skill] : action.leadSkill;
+  const opening = rollStageLeadOpening(
+    state,
+    current,
+    {
+      rawSkill,
+      identity,
+      energy: member?.energy ?? null,
+      maxPower: member?.maxPower,
+      role: member?.role,
+    },
+    random,
+  );
+  const energyCost = member ? Math.min(member.energy, opening.openingEnergyCost) : 0;
+  const nextEnergy = member ? clamp(member.energy - energyCost, 0, 100) : null;
+  const funGain = stage === "planning"
+    ? opening.quality * .65
+    : stage === "coding" ? opening.quality * .35 : 0;
+  const creativityGain = stage === "planning"
+    ? opening.quality
+    : stage === "graphics" ? opening.quality * .12 : 0;
+  const graphicsGain = stage === "graphics" ? opening.quality * 1.05 : 0;
+  const soundGain = stage === "sound" ? opening.quality * 1.1 : 0;
+  const project = {
+    ...current,
+    leadStaffId: member?.id,
+    leadName: member?.name ?? action.leadName,
+    leadSkill: opening.effectiveSkill,
+    progress: current.progress + opening.progress,
+    stageProgress: (current.stageProgress ?? 0) + opening.progress,
+    fun: current.fun + funGain,
+    creativity: current.creativity + creativityGain,
+    graphics: current.graphics + graphicsGain,
+    sound: current.sound + soundGain,
+    bugs: current.bugs + opening.bugs,
+  };
+  const formatGain = (value: number) => `+${value.toFixed(1)}`;
+  const entries: ResultData["entries"] = [
+    {
+      category: "quality",
+      label: "阶段进度",
+      value: formatGain(opening.progress),
+      tone: "positive",
+      detail: "开工产出已写入项目",
+    },
+  ];
+  if (funGain > 0) entries.push({ category: "quality", label: "趣味", value: formatGain(funGain), tone: "positive" });
+  if (creativityGain > 0) entries.push({ category: "quality", label: "创意", value: formatGain(creativityGain), tone: "positive" });
+  if (graphicsGain > 0) entries.push({ category: "quality", label: "画面", value: formatGain(graphicsGain), tone: "positive" });
+  if (soundGain > 0) entries.push({ category: "quality", label: "音乐", value: formatGain(soundGain), tone: "positive" });
+  entries.push({
+    category: "risk",
+    label: "漏洞",
+    value: formatGain(opening.bugs),
+    tone: opening.bugs > .05 ? "negative" : "neutral",
+    detail: stage === "coding" ? "程序开工可能引入隐藏问题" : "本次新增",
+  });
+  entries.push(member
+    ? {
+        category: "resource",
+        label: `${member.name}体力`,
+        value: `-${energyCost.toFixed(1)}`,
+        tone: "negative",
+        detail: nextEnergy !== null && nextEnergy <= 10 ? "已进入休息" : `剩余 ${nextEnergy?.toFixed(1)}%`,
+      }
+    : {
+        category: "resource",
+        label: "外聘费用",
+        value: `-${formatCash(cost)}`,
+        tone: "negative",
+        detail: "一次性专业产出",
+      });
+  if (opening.repeated) {
+    entries.push({
+      category: "risk",
+      label: "重复负责",
+      value: `-${Math.round((1 - opening.repeatMultiplier) * 100)}%`,
+      tone: "negative",
+      detail: "与上次同阶段负责人相同",
+    });
+  }
+  const leadName = member?.name ?? action.leadName;
+  return {
+    state: {
+      ...state,
+      cash: state.cash - cost,
+      staff: member
+        ? state.staff.map((item) => item.id === member.id
+            ? { ...item, energy: nextEnergy ?? item.energy, resting: (nextEnergy ?? item.energy) <= 10 }
+            : item)
+        : state.staff,
+      lastStageLeads: { ...state.lastStageLeads, [stage]: identity },
+      project,
+    },
+    effects: [{
+      type: "stage-creation",
+      creation: {
+        stage,
+        leadStaffId: member?.id,
+        leadName,
+        external: !member,
+        repeated: opening.repeated,
+        roleFit: opening.roleFit,
+        skillLabel: stageInfo.short,
+        effectiveSkill: opening.effectiveSkill,
+        result: {
+          title: `${stageInfo.label} · 开工成果`,
+          summary: `${leadName}以${opening.roleFit}完成创作，实际变化已经计入《${current.name}》。`,
+          entries,
+        },
+      },
+    }],
+  };
+}
+
 export function applyGameAction(
   state: GameState,
   action: GameAction,
@@ -1211,25 +1358,8 @@ export function applyGameAction(
         cash: state.cash - (action.cost ?? 0),
         project: action.project,
       });
-    case "choose-lead": {
-      if (!state.project || state.project.kind !== "game" || state.project.stage === "debug") {
-        return noEffects(state);
-      }
-      const stage = state.project.stage ?? "planning";
-      const identity = action.leadStaffId ?? "external";
-      const repeated = state.lastStageLeads[stage] === identity;
-      return noEffects({
-        ...state,
-        cash: state.cash - (action.cost ?? 0),
-        lastStageLeads: { ...state.lastStageLeads, [stage]: identity },
-        project: {
-          ...state.project,
-          leadStaffId: action.leadStaffId,
-          leadName: action.leadName,
-          leadSkill: action.leadSkill * getLeadRepeatMultiplier(repeated),
-        },
-      });
-    }
+    case "choose-lead":
+      return chooseStageLead(state, action, random);
     case "apply-marketing":
       return applyMarketing(state, action);
     case "train-staff":

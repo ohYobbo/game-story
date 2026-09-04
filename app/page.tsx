@@ -42,6 +42,7 @@ import {
   predictGamePlan,
 } from "./game/predictions";
 import { parseSave, SAVE_STORAGE_KEY, serializeGameState } from "./game/save";
+import { advanceStageCreation } from "./game/stage-sequence";
 import { useGameController } from "./game/use-game-controller";
 import type { EngineEffect } from "./game/engine";
 import type {
@@ -55,6 +56,8 @@ import type {
   ResultData,
   ReviewData,
   Staff,
+  StageCreationPhase,
+  StageCreationState,
 } from "./game/types";
 
 export default function Home() {
@@ -110,7 +113,14 @@ export default function Home() {
   const [review, setReview] = useState<ReviewData | null>(null);
   const [eventData, setEventData] = useState<EventData | null>(null);
   const [resultData, setResultData] = useState<ResultData | null>(null);
+  const [stageCreation, setStageCreation] = useState<StageCreationState | null>(null);
+  const stageCreationRef = useRef(stageCreation);
   const tickRef = useRef(0);
+
+  const replaceStageCreation = useCallback((next: StageCreationState | null) => {
+    stageCreationRef.current = next;
+    setStageCreation(next);
+  }, []);
 
   useEffect(() => {
     const saved = parseSave(window.localStorage.getItem(SAVE_STORAGE_KEY));
@@ -193,11 +203,12 @@ export default function Home() {
   }, [selectedGenre]);
 
   useEffect(() => {
-    if (project?.kind === "game" && project.stage !== "debug" && !project.leadName && !modal) {
+    if (project?.kind === "game" && project.stage !== "debug" && !project.leadName && !modal && !stageCreation) {
       setPaused(true);
+      replaceStageCreation({ phase: "select", stage: project.stage ?? "planning" });
       setModal("stage");
     }
-  }, [project, modal]);
+  }, [project, modal, stageCreation, replaceStageCreation]);
 
   const announce = useCallback((message: string) => {
     setToast(message);
@@ -209,7 +220,13 @@ export default function Home() {
       if (effect.type === "toast") announce(effect.message);
       if (effect.type === "pause-for-stage") {
         setPaused(true);
+        replaceStageCreation({ phase: "select", stage: effect.stage });
         setModal("stage");
+      }
+      if (effect.type === "stage-creation") {
+        setPaused(true);
+        setModal(null);
+        replaceStageCreation({ ...effect.creation, phase: "focus" });
       }
       if (effect.type === "event") {
         setEventData(effect.event);
@@ -225,7 +242,7 @@ export default function Home() {
         setModal("result");
       }
     }
-  }, [announce]);
+  }, [announce, replaceStageCreation]);
 
   const saveGame = () => {
     window.localStorage.setItem(
@@ -247,13 +264,13 @@ export default function Home() {
   };
 
   useEffect(() => {
-    if (modal) return;
+    if (modal || stageCreation) return;
     const result = dispatchGame({ type: "scheduled-event" });
     applyEngineEffects(result.effects);
-  }, [year, month, week, modal, dispatchGame, applyEngineEffects]);
+  }, [year, month, week, modal, stageCreation, dispatchGame, applyEngineEffects]);
 
   useEffect(() => {
-    if (week !== 1 || modal) return;
+    if (week !== 1 || modal || stageCreation) return;
     const chartEntry = releases
       .filter((item) => (item.weeklySales ?? 0) > 0)
       .sort((a, b) => (a.weeklyRank ?? 99) - (b.weeklyRank ?? 99))[0];
@@ -263,10 +280,10 @@ export default function Home() {
       const platform = availablePlatforms[availablePlatforms.length - 1];
       setIndustryNews(`${platform?.name ?? "个人电脑"}市场持续升温，玩家期待下一款热门作品。`);
     }
-  }, [month, week, modal, releases, availablePlatforms, setIndustryNews]);
+  }, [month, week, modal, stageCreation, releases, availablePlatforms, setIndustryNews]);
 
   useEffect(() => {
-    if (paused || modal) return;
+    if (paused || modal || stageCreation) return;
     const interval = window.setInterval(() => {
       tickRef.current += 1;
       const result = dispatchGame({
@@ -276,7 +293,7 @@ export default function Home() {
       applyEngineEffects(result.effects);
     }, 1200 / speed);
     return () => window.clearInterval(interval);
-  }, [paused, modal, speed, dispatchGame, applyEngineEffects]);
+  }, [paused, modal, stageCreation, speed, dispatchGame, applyEngineEffects]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -310,6 +327,7 @@ export default function Home() {
     });
     setSelectedSequelName("");
     setSelectedDirectionPoints(DEFAULT_DIRECTION_POINTS);
+    replaceStageCreation({ phase: "select", stage: "planning" });
     setModal("stage");
     setPaused(true);
     announce("企划通过，请选择负责人");
@@ -326,14 +344,17 @@ export default function Home() {
     if (!project || project.kind !== "game" || project.stage === "debug") return;
     const stageInfo = STAGE_INFO[project.stage ?? "planning"];
     const skill = member[stageInfo.skill];
-    dispatchGame({
+    const result = dispatchGame({
       type: "choose-lead",
       leadStaffId: member.id,
       leadName: member.name,
       leadSkill: skill,
     });
-    closeModal();
-    announce(`${member.name} 负责${stageInfo.label}`);
+    applyEngineEffects(result.effects);
+    if (result.effects.some((effect) => effect.type === "stage-creation")) {
+      window.localStorage.setItem(SAVE_STORAGE_KEY, JSON.stringify(serializeGameState(result.state)));
+      announce(`${member.name} 开始${stageInfo.label}`);
+    }
   };
 
   const hireExternalLead = () => {
@@ -342,14 +363,17 @@ export default function Home() {
     const stageInfo = STAGE_INFO[stage];
     const prediction = predictExternalLead(game, project);
     if (cash < prediction.cost) return announce("资金不足，无法邀请外部专家");
-    dispatchGame({
+    const result = dispatchGame({
       type: "choose-lead",
       leadName: "外聘名人",
       leadSkill: prediction.rawSkill,
       cost: prediction.cost,
     });
-    closeModal();
-    announce(`外部专家加入${stageInfo.label}`);
+    applyEngineEffects(result.effects);
+    if (result.effects.some((effect) => effect.type === "stage-creation")) {
+      window.localStorage.setItem(SAVE_STORAGE_KEY, JSON.stringify(serializeGameState(result.state)));
+      announce(`外部专家开始${stageInfo.label}`);
+    }
   };
 
   const forceRelease = () => {
@@ -572,6 +596,14 @@ export default function Home() {
     setPaused(true);
   };
 
+  const advanceStageSequence = useCallback((phase: Exclude<StageCreationPhase, "select">) => {
+    const current = stageCreationRef.current;
+    const next = advanceStageCreation(current, phase);
+    if (next === current) return;
+    replaceStageCreation(next);
+    if (!next) setPaused(false);
+  }, [replaceStageCreation]);
+
   return (
     <main className="game-page">
       <div className="game-shell">
@@ -590,6 +622,8 @@ export default function Home() {
           onRestart={restartGame}
           onTogglePause={() => setPaused((value) => !value)}
           onCycleSpeed={() => setSpeed((value) => value === 3 ? 1 : value + 1)}
+          stageCreation={stageCreation}
+          onAdvanceStageCreation={advanceStageSequence}
         />
         <GameModals
           game={game}

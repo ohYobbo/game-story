@@ -37,6 +37,7 @@ import type {
   GameState,
   Inventory,
   Project,
+  RandomSource,
   Release,
   Staff,
 } from "./types";
@@ -273,6 +274,16 @@ const stageRoleFit: Record<Exclude<ProductionStage, "debug">, string[]> = {
   sound: ["音效师", "制作人", "黑客"],
 };
 
+export const CONTINUOUS_LEAD_MULTIPLIER = .8;
+
+export type StageLeadInput = {
+  rawSkill: number;
+  identity: number | "external";
+  energy: number | null;
+  maxPower?: number;
+  role?: string;
+};
+
 export type StageLeadPrediction = {
   skillLabel: string;
   rawSkill: number;
@@ -282,6 +293,10 @@ export type StageLeadPrediction = {
   mayRest: boolean;
   progressRange: NumberRange;
   qualityRange: NumberRange;
+  openingProgressRange: NumberRange;
+  openingQualityRange: NumberRange;
+  openingBugRange: NumberRange;
+  openingEnergyCost: number;
   contributionLevel: string;
   gapToBest: number;
   repeated: boolean;
@@ -297,32 +312,84 @@ function stageLeadNumbers(
   identity: number | "external",
   energy: number | null,
   maxPower = 10,
+  role?: string,
 ) {
   const stage = (project.stage ?? "planning") as Exclude<ProductionStage, "debug">;
   const repeated = state.lastStageLeads[stage] === identity;
   const repeatMultiplier = getLeadRepeatMultiplier(repeated);
   const effectiveSkill = rawSkill * repeatMultiplier;
+  const fitsRole = identity === "external" || stageRoleFit[stage].includes(role ?? "");
+  const roleMultiplier = fitsRole ? 1 : .82;
+  const energyMultiplier = energy === null ? 1 : .55 + Math.max(0, Math.min(100, energy)) / 100 * .45;
+  const openingSkill = effectiveSkill * roleMultiplier * energyMultiplier;
   const direction = getDirectionConfig(project.direction);
   const stagePower = getStageTeamPower(state.staff, stage);
   const energyModifier = getEnergyModifier(state.staff);
   const progressRange = {
-    min: getDevelopmentGain(stagePower, effectiveSkill, direction.speed, energyModifier, 0),
-    max: getDevelopmentGain(stagePower, effectiveSkill, direction.speed, energyModifier, 1),
+    min: getDevelopmentGain(stagePower, effectiveSkill * CONTINUOUS_LEAD_MULTIPLIER, direction.speed, energyModifier, 0),
+    max: getDevelopmentGain(stagePower, effectiveSkill * CONTINUOUS_LEAD_MULTIPLIER, direction.speed, energyModifier, 1),
   };
   const qualityRange = {
-    min: getQualityGain(stagePower, effectiveSkill, direction.quality, 0),
-    max: getQualityGain(stagePower, effectiveSkill, direction.quality, 1),
+    min: getQualityGain(stagePower, effectiveSkill * CONTINUOUS_LEAD_MULTIPLIER, direction.quality, 0),
+    max: getQualityGain(stagePower, effectiveSkill * CONTINUOUS_LEAD_MULTIPLIER, direction.quality, 1),
   };
-  const ticks = Math.ceil((project.stageTarget ?? 1) / Math.max(.01, progressRange.max));
+  const openingProgressRange = {
+    min: getDevelopmentGain(0, openingSkill, direction.speed, 1, 0) * 1.4,
+    max: getDevelopmentGain(0, openingSkill, direction.speed, 1, 1) * 1.4,
+  };
+  const openingQualityRange = {
+    min: getQualityGain(0, openingSkill, direction.quality, 0) * 1.8,
+    max: getQualityGain(0, openingSkill, direction.quality, 1) * 1.8,
+  };
+  const bugFactor = Math.max(.45, 1 - openingSkill / 120);
+  const openingBugRange = {
+    min: 0,
+    max: stage === "coding"
+      ? (project.direction === "赶工" ? 1.05 : .65) * bugFactor
+      : .1 * bugFactor,
+  };
+  const openingEnergyCost = identity === "external"
+    ? 0
+    : Math.max(5, Math.min(12, 10 - Math.max(8, maxPower) * .18));
+  const ticks = Math.ceil(Math.max(0, (project.stageTarget ?? 1) - openingProgressRange.max) / Math.max(.01, progressRange.max));
   const energyDrain = 100 / (Math.max(8, maxPower) * 3.2);
   return {
     stage,
     repeated,
     repeatMultiplier,
     effectiveSkill,
+    roleFit: fitsRole ? (identity === "external" ? "专业外援" : "职业适配") : "跨职能",
     progressRange,
     qualityRange,
-    mayRest: energy !== null && energy - ticks * energyDrain <= 10,
+    openingProgressRange,
+    openingQualityRange,
+    openingBugRange,
+    openingEnergyCost,
+    mayRest: energy !== null && energy - openingEnergyCost - ticks * energyDrain <= 10,
+  };
+}
+
+export function rollStageLeadOpening(
+  state: GameState,
+  project: Project,
+  lead: StageLeadInput,
+  random: RandomSource,
+) {
+  const values = stageLeadNumbers(
+    state,
+    project,
+    lead.rawSkill,
+    lead.identity,
+    lead.energy,
+    lead.maxPower,
+    lead.role,
+  );
+  const roll = (range: NumberRange) => range.min + (range.max - range.min) * random();
+  return {
+    ...values,
+    progress: roll(values.openingProgressRange),
+    quality: roll(values.openingQualityRange),
+    bugs: roll(values.openingBugRange),
   };
 }
 
@@ -330,7 +397,7 @@ export function predictStageLead(state: GameState, project: Project, member: Sta
   const stage = (project.stage ?? "planning") as Exclude<ProductionStage, "debug">;
   const skillKey = STAGE_INFO[stage].skill;
   const rawSkill = member[skillKey];
-  const values = stageLeadNumbers(state, project, rawSkill, member.id, member.energy, member.maxPower);
+  const values = stageLeadNumbers(state, project, rawSkill, member.id, member.energy, member.maxPower, member.role);
   const candidates = state.staff.map((candidate) => {
     const candidateRaw = candidate[skillKey];
     const repeat = state.lastStageLeads[stage] === candidate.id;
@@ -343,11 +410,15 @@ export function predictStageLead(state: GameState, project: Project, member: Sta
     skillLabel: STAGE_INFO[stage].short,
     rawSkill,
     effectiveSkill: values.effectiveSkill,
-    roleFit: stageRoleFit[stage].includes(member.role) ? "职业适配" : "跨职能",
+    roleFit: values.roleFit,
     energy: member.energy,
     mayRest: values.mayRest,
     progressRange: values.progressRange,
     qualityRange: values.qualityRange,
+    openingProgressRange: values.openingProgressRange,
+    openingQualityRange: values.openingQualityRange,
+    openingBugRange: values.openingBugRange,
+    openingEnergyCost: values.openingEnergyCost,
     contributionLevel: ratio >= .95 ? "最佳" : ratio >= .75 ? "合适" : "偏弱",
     gapToBest,
     repeated: values.repeated,
@@ -372,6 +443,10 @@ export function predictExternalLead(state: GameState, project: Project): StageLe
     mayRest: false,
     progressRange: values.progressRange,
     qualityRange: values.qualityRange,
+    openingProgressRange: values.openingProgressRange,
+    openingQualityRange: values.openingQualityRange,
+    openingBugRange: values.openingBugRange,
+    openingEnergyCost: values.openingEnergyCost,
     contributionLevel: "强力",
     gapToBest: 0,
     repeated: values.repeated,

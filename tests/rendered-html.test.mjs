@@ -110,9 +110,11 @@ test("wires the complete generated pixel-art system into the product", async () 
     dashboard,
     modals,
     pixelUi,
+    stageCreation,
     css,
     dashboardCss,
     modalsCss,
+    stageCreationCss,
     responsiveCss,
     layout,
     background,
@@ -128,9 +130,11 @@ test("wires the complete generated pixel-art system into the product", async () 
     readFile(new URL("../app/components/game-dashboard.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/components/game-modals.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/components/pixel-ui.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/components/stage-creation.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
     readFile(new URL("../app/styles/dashboard.css", import.meta.url), "utf8"),
     readFile(new URL("../app/styles/modals.css", import.meta.url), "utf8"),
+    readFile(new URL("../app/styles/stage-creation.css", import.meta.url), "utf8"),
     readFile(new URL("../app/styles/responsive.css", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     stat(new URL("../public/pixel-studio-night-bg.png", import.meta.url)),
@@ -153,8 +157,8 @@ test("wires the complete generated pixel-art system into the product", async () 
     stat(new URL("../public/game-ui/panel-texture.png", import.meta.url)),
   ]);
 
-  const components = [page, dashboard, modals, pixelUi].join("\n");
-  const styles = [css, dashboardCss, modalsCss, responsiveCss].join("\n");
+  const components = [page, dashboard, modals, pixelUi, stageCreation].join("\n");
+  const styles = [css, dashboardCss, modalsCss, stageCreationCss, responsiveCss].join("\n");
 
   assert.match(components, /WorkerBehavior/);
   assert.match(components, /getWorkerBehavior\(member, project, index\)/);
@@ -220,12 +224,22 @@ test("wires the complete generated pixel-art system into the product", async () 
   assert.match(components, /function StaffAvatar/);
   assert.match(components, /event\.key !== "Escape"/);
   assert.match(components, /previousFocus\?\.focus\(\)/);
+  for (const phase of ["focus", "create", "result", "resume"]) {
+    assert.match(styles, new RegExp("\\.phase-" + phase));
+  }
+  for (const stage of ["planning", "coding", "graphics", "sound"]) {
+    assert.match(stageCreation, new RegExp("\\b" + stage + ":"));
+  }
+  assert.match(components, /onAnimationEnd=\{handleAnimationEnd\}/);
+  assert.match(components, /FALLBACK_DELAYS/);
+  assert.match(components, /prefers-reduced-motion: reduce/);
+  assert.match(components, /确认成果 · 开始推进/);
   assert.match(styles, /prefers-reduced-motion:\s*reduce/);
   assert.match(layout, /\/og\.png/);
   assert.match(layout, /\/favicon\.png/);
   assert.doesNotMatch(
     components + "\n" + styles + "\n" + layout,
-    /window\.svg|globe\.svg|file\.svg/,
+    /window\.svg|globe\.svg|file\.svg|new Audio|AudioContext|<audio/i,
   );
   for (const asset of [
     background,

@@ -91,9 +91,11 @@ export function getWorkerBehavior(
 export function PixelPerson({
   staff,
   behavior,
+  className = "",
 }: {
   staff: Staff;
   behavior: WorkerBehavior;
+  className?: string;
 }) {
   const action = WORKER_BEHAVIORS[behavior];
   const working = !["idle", "sipping", "tired"].includes(behavior);
@@ -111,7 +113,7 @@ export function PixelPerson({
 
   return (
     <div
-      className={`worker behavior-${behavior} ${working ? "is-working" : "is-resting"}`}
+      className={`worker behavior-${behavior} ${working ? "is-working" : "is-resting"} ${className}`}
       style={{ "--worker-delay": `${-(staff.id % 4) * .24}s` } as CSSProperties}
       aria-label={`${staff.name}，${staff.role}，正在${action.label}`}
     >

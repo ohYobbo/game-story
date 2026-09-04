@@ -65,6 +65,24 @@ export type ResultData = {
   entries: ResultEntry[];
 };
 
+export type StageCreationPhase = "select" | "focus" | "create" | "result" | "resume";
+
+export type StageCreationData = {
+  stage: Exclude<ProductionStage, "debug">;
+  leadStaffId?: number;
+  leadName: string;
+  external: boolean;
+  repeated: boolean;
+  roleFit: string;
+  skillLabel: string;
+  effectiveSkill: number;
+  result: ResultData;
+};
+
+export type StageCreationState =
+  | { phase: "select"; stage: Exclude<ProductionStage, "debug"> }
+  | (StageCreationData & { phase: Exclude<StageCreationPhase, "select"> });
+
 export type ConsoleSpec = {
   cpu: string;
   media: string;

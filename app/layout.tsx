@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import "./globals.css";
 import "./styles/dashboard.css";
 import "./styles/modals.css";
+import "./styles/stage-creation.css";
 import "./styles/responsive.css";
 
 const title = "像素工坊 — 游戏公司经营物语";

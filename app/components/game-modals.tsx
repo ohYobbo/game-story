@@ -356,12 +356,13 @@ export function GameModals({
               {staff.map((member) => {
                 const prediction = predictStageLead(game, project, member);
                 return (
-                  <button className={`lead-choice is-${prediction.contributionLevel}`} key={member.id} onClick={() => assignStageLead(member)}>
+                  <button className={`lead-choice is-${prediction.contributionLevel}`} key={member.id} onClick={() => assignStageLead(member)} disabled={Boolean(member.resting || member.energy <= 10)}>
                     <StaffAvatar staff={member} className="mini-avatar" />
                     <span>
                       <b>{member.name}<em>{prediction.contributionLevel}</em></b>
                       <small>{member.role} · {prediction.roleFit} · 体力 {Math.round(member.energy)}%{prediction.mayRest ? " · 可能中途休息" : ""}</small>
-                      <small>单轮品质 {prediction.qualityRange.min.toFixed(1)}–{prediction.qualityRange.max.toFixed(1)} · {prediction.gapToBest > 0 ? `比最佳低 ${prediction.gapToBest.toFixed(1)}` : "团队最佳"}</small>
+                      <small>{member.resting || member.energy <= 10 ? "正在休息 · 暂时无法负责" : `开工进度 ${prediction.openingProgressRange.min.toFixed(1)}–${prediction.openingProgressRange.max.toFixed(1)} · 开工品质 ${prediction.openingQualityRange.min.toFixed(1)}–${prediction.openingQualityRange.max.toFixed(1)}`}</small>
+                      {!member.resting && member.energy > 10 && <small>开工体力 -{prediction.openingEnergyCost.toFixed(1)} · {prediction.gapToBest > 0 ? `比最佳低 ${prediction.gapToBest.toFixed(1)}` : "团队最佳"}</small>}
                       {prediction.repeated && <small className="lead-warning">上次同阶段负责人 · 能力 -{prediction.repeatPenalty}%</small>}
                     </span>
                     <strong>{prediction.skillLabel} {prediction.effectiveSkill.toFixed(1)}</strong>
@@ -376,7 +377,7 @@ export function GameModals({
                     <span>
                       <b>邀请外聘名人<em>{prediction.contributionLevel}</em></b>
                       <small>专业外援 · 不消耗内部员工体力</small>
-                      <small>单轮品质 {prediction.qualityRange.min.toFixed(1)}–{prediction.qualityRange.max.toFixed(1)}</small>
+                      <small>开工进度 {prediction.openingProgressRange.min.toFixed(1)}–{prediction.openingProgressRange.max.toFixed(1)} · 开工品质 {prediction.openingQualityRange.min.toFixed(1)}–{prediction.openingQualityRange.max.toFixed(1)}</small>
                       {prediction.repeated && <small className="lead-warning">上次同阶段也使用外援 · 能力 -{prediction.repeatPenalty}%</small>}
                     </span>
                     <strong>{formatCash(prediction.cost)}</strong>

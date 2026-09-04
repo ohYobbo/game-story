@@ -3,10 +3,26 @@
 import { CONTRACT_QUALITY_LABELS, STAGE_INFO, STAGE_ORDER } from "../game/data";
 import type { EarlyReleasePrediction } from "../game/predictions";
 import { formatCash } from "../game/rules";
-import type { GameState, Modal, Project, Release } from "../game/types";
+import type {
+  GameState,
+  Modal,
+  Project,
+  Release,
+  StageCreationPhase,
+  StageCreationState,
+  WorkerBehavior,
+} from "../game/types";
 import { PixelPerson, UiIcon, getWorkerBehavior } from "./pixel-ui";
+import { StageCreationOverlay } from "./stage-creation";
 
 type OpenMenu = (modal: Modal) => void;
+
+const creationBehavior: Record<StageCreationState["stage"], WorkerBehavior> = {
+  planning: "planning",
+  coding: "coding",
+  graphics: "drawing",
+  sound: "mixing",
+};
 
 export function TopHud({
   year,
@@ -38,14 +54,26 @@ export function OfficeView({
   project,
   fans,
   research,
-}: Pick<GameState, "companyLevel" | "staff" | "project" | "fans" | "research">) {
+  stageCreation,
+}: Pick<GameState, "companyLevel" | "staff" | "project" | "fans" | "research"> & {
+  stageCreation: StageCreationState | null;
+}) {
+  const focusedStaffId = stageCreation?.phase !== "select" ? stageCreation?.leadStaffId : undefined;
   return (
     <section className={`office office-level-${companyLevel}`} aria-label={`像素工作室第 ${companyLevel} 阶段办公室`}>
       <div className="office-light" aria-hidden="true" />
-      <div className={`workers count-${staff.length}`}>
-        {staff.map((member, index) => (
-          <PixelPerson key={member.id} staff={member} behavior={getWorkerBehavior(member, project, index)} />
-        ))}
+      <div className={`workers count-${staff.length} ${focusedStaffId ? "has-stage-focus" : ""}`}>
+        {staff.map((member, index) => {
+          const focused = member.id === focusedStaffId && stageCreation;
+          return (
+            <PixelPerson
+              key={member.id}
+              staff={member}
+              behavior={focused ? creationBehavior[focused.stage] : getWorkerBehavior(member, project, index)}
+              className={focused ? "is-stage-lead" : ""}
+            />
+          );
+        })}
       </div>
       {!project && (
         <div className="secretary-tip">
@@ -197,6 +225,8 @@ export function GameDashboard({
   onRestart,
   onTogglePause,
   onCycleSpeed,
+  stageCreation,
+  onAdvanceStageCreation,
 }: {
   game: GameState;
   modal: Modal;
@@ -212,22 +242,28 @@ export function GameDashboard({
   onRestart: () => void;
   onTogglePause: () => void;
   onCycleSpeed: () => void;
+  stageCreation: StageCreationState | null;
+  onAdvanceStageCreation: (phase: Exclude<StageCreationPhase, "select">) => void;
 }) {
+  const creationActive = Boolean(stageCreation && stageCreation.phase !== "select");
   return (
     <>
       <TopHud year={game.year} month={game.month} week={game.week} cash={game.cash} />
-      <OfficeView companyLevel={game.companyLevel} staff={game.staff} project={game.project} fans={game.fans} research={game.research} />
+      <OfficeView companyLevel={game.companyLevel} staff={game.staff} project={game.project} fans={game.fans} research={game.research} stageCreation={stageCreation} />
       <NewsStrip industryNews={game.industryNews} chartLeader={chartLeader} />
       <ProjectConsole project={game.project} projectPercent={projectPercent} earlyReleasePrediction={earlyReleasePrediction} onForceRelease={onForceRelease} onOpenMenu={onOpenMenu} />
       <BottomMenu modal={modal} onOpenMenu={onOpenMenu} />
       <div className="utility-row">
-        <button onClick={onSave}>保存</button>
-        <button onClick={onRestart}>新开公司</button>
-        <button onClick={onTogglePause}>{paused ? "继续" : "暂停"}</button>
-        <button onClick={onCycleSpeed}>速度 ×{speed}</button>
+        <button onClick={onSave} disabled={creationActive}>保存</button>
+        <button onClick={onRestart} disabled={creationActive}>新开公司</button>
+        <button onClick={onTogglePause} disabled={creationActive}>{paused ? "继续" : "暂停"}</button>
+        <button onClick={onCycleSpeed} disabled={creationActive}>速度 ×{speed}</button>
       </div>
       {toast && <div className="toast" role="status">{toast}</div>}
       {paused && !modal && <div className="pause-badge">游戏暂停</div>}
+      {stageCreation && (
+        <StageCreationOverlay creation={stageCreation} staff={game.staff} onAdvance={onAdvanceStageCreation} />
+      )}
     </>
   );
 }
