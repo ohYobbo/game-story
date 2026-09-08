@@ -1,48 +1,11 @@
-import {
-  COMBO_STARTING_BONUS,
-  getConsoleInitialUsers,
-  getContentPopularity,
-  getDevelopmentCost,
-  getDevelopmentGain,
-  getEnergyModifier,
-  getFirstWeekSales,
-  getGeneralProjectGain,
-  getGeneralQualityGain,
-  getLeadRepeatMultiplier,
-  getQualityGain,
-  getReleaseFatigueMultiplier,
-  getRepeatedUseMultiplier,
-  getReviewScores,
-  getStageTeamPower,
-  type ProductionStage,
-} from "../game-balance.ts";
-import {
-  CONTRACTS,
-  DIRECTIONS,
-  GREAT_COMBOS,
-  STAGE_INFO,
-  TRAINING_METHODS,
-} from "./data.ts";
-import {
-  getAudience,
-  getDirectionAudienceGains,
-  getDirectionBoosts,
-  getDirectionConfig,
-  getKnowledgeLevel,
-  getStageTarget,
-} from "./rules.ts";
-import type {
-  DirectionPoints,
-  FanSegments,
-  GameState,
-  Inventory,
-  Project,
-  RandomSource,
-  Release,
-  Staff,
-} from "./types";
+import { COMBO_STARTING_BONUS, getContentPopularity, getDevelopmentCost, getFirstWeekSales, getReleaseFatigueMultiplier, getReviewScores, getGeneralQualityGain } from "../game-balance.ts";
+import { CONTRACTS, GREAT_COMBOS } from "./data.ts";
+import { getAudience, getDirectionAudienceGains, getDirectionBoosts, getDirectionConfig, getKnowledgeLevel, getStageTarget } from "./rules.ts";
+import type { DirectionPoints, FanSegments, GameState, Project, Release } from "./types";
+import type { NumberRange } from "./operations.ts";
+import { forecastProject } from "./forecast.ts";
+export * from "./operations.ts";
 
-export type NumberRange = { min: number; max: number };
 export type PredictionFactor = {
   tone: "positive" | "negative" | "neutral";
   text: string;
@@ -71,8 +34,8 @@ export type GamePlanPrediction = {
   project: Project;
   cost: number;
   cashRatio: number;
-  durationWeeks: NumberRange;
-  qualityRange: NumberRange;
+  durationWeeks: NumberRange | null;
+  qualityRange: NumberRange | null;
   qualityLevel: string;
   cashPressure: string;
   riskLevel: string;
@@ -100,10 +63,6 @@ const segmentLabels: Record<keyof FanSegments, string> = {
   male: "男性",
   female: "女性",
 };
-
-export function getExternalLeadCost(stage: ProductionStage) {
-  return 15 + ["planning", "coding", "graphics", "sound"].indexOf(stage) * 20;
-}
 
 export function createGameProject(input: GamePlanInput): Project {
   const { state, sequel } = input;
@@ -145,6 +104,7 @@ export function createGameProject(input: GamePlanInput): Project {
     sequelOf: sequel?.name,
     itemUses: 0,
     eventCount: 0,
+    challengeCount: 0,
     directionPoints: { ...input.directionPoints },
     contentPopularity: getContentPopularity(input.genre, input.theme, isGreatCombo),
     debugResearch: 0,
@@ -165,39 +125,8 @@ function getAudienceChanges(genre: string, theme: string, points: DirectionPoint
 
 export function predictGamePlan(input: GamePlanInput): GamePlanPrediction {
   const project = createGameProject(input);
-  const direction = getDirectionConfig(input.direction);
-  const energyModifier = getEnergyModifier(input.state.staff);
-  let minTicks = 0;
-  let maxTicks = 0;
-  let minQuality = project.fun + project.creativity + project.graphics + project.sound;
-  let maxQuality = minQuality;
-
-  for (const stage of ["planning", "coding", "graphics", "sound"] as const) {
-    const stagePower = getStageTeamPower(input.state.staff, stage);
-    const skillKey = STAGE_INFO[stage].skill;
-    const leadSkill = Math.max(0, ...input.state.staff.map((member) => member[skillKey]));
-    const target = getStageTarget(stage, input.direction);
-    const lowProgress = Math.max(.01, getDevelopmentGain(stagePower, leadSkill, direction.speed, energyModifier, 0));
-    const highProgress = Math.max(.01, getDevelopmentGain(stagePower, leadSkill, direction.speed, energyModifier, 1));
-    const stageMinTicks = Math.ceil(target / highProgress);
-    const stageMaxTicks = Math.ceil(target / lowProgress);
-    const lowQuality = getQualityGain(stagePower, leadSkill, direction.quality, 0);
-    const highQuality = getQualityGain(stagePower, leadSkill, direction.quality, 1);
-    const qualityWeight = stage === "planning" ? 1.65 : stage === "coding" ? .35 : stage === "graphics" ? 1.17 : 1.1;
-    minTicks += stageMinTicks;
-    maxTicks += stageMaxTicks;
-    minQuality += lowQuality * stageMinTicks * qualityWeight;
-    maxQuality += highQuality * stageMaxTicks * qualityWeight;
-  }
-
-  const qualityRange = {
-    min: Math.round(minQuality / 4),
-    max: Math.round(maxQuality / 4),
-  };
-  const durationWeeks = {
-    min: Math.max(1, Math.ceil(minTicks / 4) + 1),
-    max: Math.max(2, Math.ceil(maxTicks / 4) + 3),
-  };
+  const forecast = forecastProject(input.state, project);
+  const { durationWeeks, qualityRange } = forecast;
   const cost = project.developmentCost ?? 0;
   const cashRatio = cost / Math.max(1, input.state.cash);
   const fatigue = getReleaseFatigueMultiplier(input.state.releases, input.genre, input.theme);
@@ -238,6 +167,7 @@ export function predictGamePlan(input: GamePlanInput): GamePlanPrediction {
   const advantages = advantageCandidates.slice(0, 2);
 
   const risks: PredictionFactor[] = [];
+  if (forecast.blockedRuns) risks.push({ tone: "negative", text: `${forecast.blockedRuns}/${forecast.sampleCount} 次模拟无法由内部团队完成，需调整人员或邀请外援` });
   if (input.state.cash < cost) risks.push({ tone: "negative", text: `资金缺口 ${cost - input.state.cash}千，当前无法开工` });
   else if (cashRatio >= .65) risks.push({ tone: "negative", text: `开发费占现金 ${Math.round(cashRatio * 100)}%，现金压力高` });
   if (yearsRemaining !== null && yearsRemaining <= 1) risks.push({ tone: "negative", text: `${input.platform.name}将在本年退市` });
@@ -253,7 +183,7 @@ export function predictGamePlan(input: GamePlanInput): GamePlanPrediction {
     cashRatio,
     durationWeeks,
     qualityRange,
-    qualityLevel: qualityLabel((qualityRange.min + qualityRange.max) / 2),
+    qualityLevel: qualityRange ? qualityLabel((qualityRange.min + qualityRange.max) / 2) : "无法估计",
     cashPressure: input.state.cash < cost ? "无法开工" : cashRatio >= .65 ? "高" : cashRatio >= .35 ? "中" : "低",
     riskLevel: riskPoints >= 2 ? "高" : riskPoints === 1 ? "中" : "低",
     combinationLevel,
@@ -263,297 +193,36 @@ export function predictGamePlan(input: GamePlanInput): GamePlanPrediction {
     marketUsers: input.platform.users,
     platformYearsRemaining: yearsRemaining,
     advantages,
-    risks: risks.slice(0, 2),
-  };
-}
-
-const stageRoleFit: Record<Exclude<ProductionStage, "debug">, string[]> = {
-  planning: ["编剧", "总监", "制作人", "黑客"],
-  coding: ["程序员", "总监", "硬件工程师", "黑客"],
-  graphics: ["美术", "总监", "制作人", "黑客"],
-  sound: ["音效师", "制作人", "黑客"],
-};
-
-export const CONTINUOUS_LEAD_MULTIPLIER = .8;
-
-export type StageLeadInput = {
-  rawSkill: number;
-  identity: number | "external";
-  energy: number | null;
-  maxPower?: number;
-  role?: string;
-};
-
-export type StageLeadPrediction = {
-  skillLabel: string;
-  rawSkill: number;
-  effectiveSkill: number;
-  roleFit: string;
-  energy: number | null;
-  mayRest: boolean;
-  progressRange: NumberRange;
-  qualityRange: NumberRange;
-  openingProgressRange: NumberRange;
-  openingQualityRange: NumberRange;
-  openingBugRange: NumberRange;
-  openingEnergyCost: number;
-  contributionLevel: string;
-  gapToBest: number;
-  repeated: boolean;
-  repeatPenalty: number;
-  cost: number;
-  external: boolean;
-};
-
-function stageLeadNumbers(
-  state: GameState,
-  project: Project,
-  rawSkill: number,
-  identity: number | "external",
-  energy: number | null,
-  maxPower = 10,
-  role?: string,
-) {
-  const stage = (project.stage ?? "planning") as Exclude<ProductionStage, "debug">;
-  const repeated = state.lastStageLeads[stage] === identity;
-  const repeatMultiplier = getLeadRepeatMultiplier(repeated);
-  const effectiveSkill = rawSkill * repeatMultiplier;
-  const fitsRole = identity === "external" || stageRoleFit[stage].includes(role ?? "");
-  const roleMultiplier = fitsRole ? 1 : .82;
-  const energyMultiplier = energy === null ? 1 : .55 + Math.max(0, Math.min(100, energy)) / 100 * .45;
-  const openingSkill = effectiveSkill * roleMultiplier * energyMultiplier;
-  const direction = getDirectionConfig(project.direction);
-  const stagePower = getStageTeamPower(state.staff, stage);
-  const energyModifier = getEnergyModifier(state.staff);
-  const progressRange = {
-    min: getDevelopmentGain(stagePower, effectiveSkill * CONTINUOUS_LEAD_MULTIPLIER, direction.speed, energyModifier, 0),
-    max: getDevelopmentGain(stagePower, effectiveSkill * CONTINUOUS_LEAD_MULTIPLIER, direction.speed, energyModifier, 1),
-  };
-  const qualityRange = {
-    min: getQualityGain(stagePower, effectiveSkill * CONTINUOUS_LEAD_MULTIPLIER, direction.quality, 0),
-    max: getQualityGain(stagePower, effectiveSkill * CONTINUOUS_LEAD_MULTIPLIER, direction.quality, 1),
-  };
-  const openingProgressRange = {
-    min: getDevelopmentGain(0, openingSkill, direction.speed, 1, 0) * 1.4,
-    max: getDevelopmentGain(0, openingSkill, direction.speed, 1, 1) * 1.4,
-  };
-  const openingQualityRange = {
-    min: getQualityGain(0, openingSkill, direction.quality, 0) * 1.8,
-    max: getQualityGain(0, openingSkill, direction.quality, 1) * 1.8,
-  };
-  const bugFactor = Math.max(.45, 1 - openingSkill / 120);
-  const openingBugRange = {
-    min: 0,
-    max: stage === "coding"
-      ? (project.direction === "赶工" ? 1.05 : .65) * bugFactor
-      : .1 * bugFactor,
-  };
-  const openingEnergyCost = identity === "external"
-    ? 0
-    : Math.max(5, Math.min(12, 10 - Math.max(8, maxPower) * .18));
-  const ticks = Math.ceil(Math.max(0, (project.stageTarget ?? 1) - openingProgressRange.max) / Math.max(.01, progressRange.max));
-  const energyDrain = 100 / (Math.max(8, maxPower) * 3.2);
-  return {
-    stage,
-    repeated,
-    repeatMultiplier,
-    effectiveSkill,
-    roleFit: fitsRole ? (identity === "external" ? "专业外援" : "职业适配") : "跨职能",
-    progressRange,
-    qualityRange,
-    openingProgressRange,
-    openingQualityRange,
-    openingBugRange,
-    openingEnergyCost,
-    mayRest: energy !== null && energy - openingEnergyCost - ticks * energyDrain <= 10,
-  };
-}
-
-export function rollStageLeadOpening(
-  state: GameState,
-  project: Project,
-  lead: StageLeadInput,
-  random: RandomSource,
-) {
-  const values = stageLeadNumbers(
-    state,
-    project,
-    lead.rawSkill,
-    lead.identity,
-    lead.energy,
-    lead.maxPower,
-    lead.role,
-  );
-  const roll = (range: NumberRange) => range.min + (range.max - range.min) * random();
-  return {
-    ...values,
-    progress: roll(values.openingProgressRange),
-    quality: roll(values.openingQualityRange),
-    bugs: roll(values.openingBugRange),
-  };
-}
-
-export function predictStageLead(state: GameState, project: Project, member: Staff): StageLeadPrediction {
-  const stage = (project.stage ?? "planning") as Exclude<ProductionStage, "debug">;
-  const skillKey = STAGE_INFO[stage].skill;
-  const rawSkill = member[skillKey];
-  const values = stageLeadNumbers(state, project, rawSkill, member.id, member.energy, member.maxPower, member.role);
-  const candidates = state.staff.map((candidate) => {
-    const candidateRaw = candidate[skillKey];
-    const repeat = state.lastStageLeads[stage] === candidate.id;
-    return candidateRaw * getLeadRepeatMultiplier(repeat);
-  });
-  const best = Math.max(values.effectiveSkill, ...candidates);
-  const gapToBest = Math.max(0, Math.round((best - values.effectiveSkill) * 10) / 10);
-  const ratio = best > 0 ? values.effectiveSkill / best : 0;
-  return {
-    skillLabel: STAGE_INFO[stage].short,
-    rawSkill,
-    effectiveSkill: values.effectiveSkill,
-    roleFit: values.roleFit,
-    energy: member.energy,
-    mayRest: values.mayRest,
-    progressRange: values.progressRange,
-    qualityRange: values.qualityRange,
-    openingProgressRange: values.openingProgressRange,
-    openingQualityRange: values.openingQualityRange,
-    openingBugRange: values.openingBugRange,
-    openingEnergyCost: values.openingEnergyCost,
-    contributionLevel: ratio >= .95 ? "最佳" : ratio >= .75 ? "合适" : "偏弱",
-    gapToBest,
-    repeated: values.repeated,
-    repeatPenalty: Math.round((1 - values.repeatMultiplier) * 100),
-    cost: 0,
-    external: false,
-  };
-}
-
-export function predictExternalLead(state: GameState, project: Project): StageLeadPrediction {
-  const stage = (project.stage ?? "planning") as Exclude<ProductionStage, "debug">;
-  const skillKey = STAGE_INFO[stage].skill;
-  const stageIndex = ["planning", "coding", "graphics", "sound"].indexOf(stage);
-  const rawSkill = Math.max(0, ...state.staff.map((member) => member[skillKey])) + 6 + stageIndex * 2;
-  const values = stageLeadNumbers(state, project, rawSkill, "external", null);
-  return {
-    skillLabel: STAGE_INFO[stage].short,
-    rawSkill,
-    effectiveSkill: values.effectiveSkill,
-    roleFit: "专业外援",
-    energy: null,
-    mayRest: false,
-    progressRange: values.progressRange,
-    qualityRange: values.qualityRange,
-    openingProgressRange: values.openingProgressRange,
-    openingQualityRange: values.openingQualityRange,
-    openingBugRange: values.openingBugRange,
-    openingEnergyCost: values.openingEnergyCost,
-    contributionLevel: "强力",
-    gapToBest: 0,
-    repeated: values.repeated,
-    repeatPenalty: Math.round((1 - values.repeatMultiplier) * 100),
-    cost: getExternalLeadCost(stage),
-    external: true,
+    risks,
   };
 }
 
 export function predictContract(state: GameState, contract: (typeof CONTRACTS)[number]) {
-  const direction = DIRECTIONS[0];
-  const energyModifier = getEnergyModifier(state.staff);
-  const totalPower = state.staff.reduce((sum, member) => member.resting
-    ? sum
-    : sum + member.code + member.scenario + member.art + member.sound, 0);
-  const lowProgress = Math.max(.01, getGeneralProjectGain(totalPower, direction.speed, energyModifier, 0));
-  const highProgress = Math.max(.01, getGeneralProjectGain(totalPower, direction.speed, energyModifier, 1));
-  const quality = getGeneralQualityGain(totalPower, direction.quality);
-  const qualityWeights = { fun: [.8, 1.8], creativity: [.7, 1.7], graphics: [.65, 1.65], sound: [.55, 1.55] } as const;
-  let minTicks = Math.ceil(contract.target / highProgress);
-  let maxTicks = Math.ceil(contract.target / lowProgress);
-  for (const [key, target] of Object.entries(contract.requirements) as [keyof typeof qualityWeights, number][]) {
-    minTicks = Math.max(minTicks, Math.ceil(target / Math.max(.01, quality * qualityWeights[key][1])));
-    maxTicks = Math.max(maxTicks, Math.ceil(target / Math.max(.01, quality * qualityWeights[key][0])));
-  }
-  const durationWeeks = { min: Math.ceil(minTicks / 4), max: Math.ceil(maxTicks / 4) };
-  const risk = durationWeeks.min > contract.deadline ? "很高" : durationWeeks.max > contract.deadline ? "中" : "低";
+  // Estimate time to satisfy every requirement; compare that time with the real deadline.
+  const forecast = forecastProject(state, {
+    kind: "contract", name: contract.name, platform: "委托", genre: "外包", theme: "",
+    direction: "均衡", progress: 0, target: contract.target,
+    fun: 0, creativity: 0, graphics: 0, sound: 0, bugs: 0, hype: 0,
+    elapsedWeeks: 0, deadlineWeeks: Number.MAX_SAFE_INTEGER, qualityTargets: contract.requirements,
+  });
+  const { durationWeeks } = forecast;
+  const totalPower = state.staff.reduce((sum, member) => member.resting ? sum : sum + member.code + member.scenario + member.art + member.sound, 0);
   return {
     durationWeeks,
-    risk,
+    risk: !durationWeeks || durationWeeks.min > contract.deadline ? "很高" : durationWeeks.max > contract.deadline || forecast.blockedRuns ? "中" : "低",
     teamPower: Math.round(totalPower),
-    qualityPerTick: Math.round(quality * 10) / 10,
+    qualityPerTick: Math.round(getGeneralQualityGain(totalPower, 1) * 10) / 10,
   };
-}
-
-export function predictTraining(
-  member: Staff,
-  method: (typeof TRAINING_METHODS)[number],
-  unlockedThemes: string[],
-) {
-  const used = member.training?.[method.id] ?? 0;
-  const multiplier = getRepeatedUseMultiplier(used, .18, .2);
-  const gains = Object.entries(method.gains).map(([key, value]) => ({
-    key: key as keyof Pick<Staff, "code" | "scenario" | "art" | "sound">,
-    min: Math.max(0, Math.round((value ?? 0) * multiplier)),
-    max: Math.max(0, Math.round((value ?? 0) * multiplier * 3)),
-  }));
-  const canUnlock = member.role === method.unlock.role && member.level >= method.unlock.level;
-  return {
-    used,
-    multiplier,
-    gains,
-    canUnlock,
-    willDiscover: canUnlock && !unlockedThemes.includes(method.unlock.name),
-    discovery: `${method.unlock.role} Lv.${method.unlock.level} 可发现“${method.unlock.name}”`,
-  };
-}
-
-export function predictMarketing(
-  state: GameState,
-  method: { name: string; hype: number; segment: keyof FanSegments },
-) {
-  const latestRelease = state.releases[0];
-  const previousUses = state.project?.kind === "game"
-    ? state.project.advertisingUses?.[method.name] ?? 0
-    : latestRelease?.advertisingUses?.[method.name] ?? 0;
-  const multiplier = getRepeatedUseMultiplier(previousUses, .25, .15);
-  const effectiveHype = Math.max(1, Math.round(method.hype * multiplier));
-  const addedDemand = latestRelease && state.project?.kind !== "game"
-    ? Math.round(Math.max(latestRelease.weeklySales ?? 0, latestRelease.sales * .04) * (effectiveHype / 8))
-    : 0;
-  return {
-    previousUses,
-    multiplier,
-    effectiveHype,
-    fanGain: Math.round(effectiveHype * 2.5),
-    segmentGain: Math.max(1, Math.round(effectiveHype / 2)),
-    addedDemand,
-    target: state.project?.kind === "game" ? "开发中作品热度" : "已发售作品后续需求",
-  };
-}
-
-export function predictItemUse(state: GameState, key: keyof Inventory) {
-  if (key === "energyDrink") {
-    return { researchCost: 0, amount: 42, multiplier: 1, target: "全体员工体力" };
-  }
-  const uses = state.project?.kind === "game" ? state.project.itemUses ?? 0 : 0;
-  const researchCost = 4 + uses * 2;
-  const multiplier = 1 / (1 + uses * .7);
-  const amount = Math.max(3, Math.round(10 * multiplier));
-  const target = key === "funBoost" ? "趣味" : key === "creativityBoost" ? "创意" : key === "graphicsBoost" ? "画面" : key === "soundBoost" ? "音乐" : "漏洞";
-  return { researchCost, amount: key === "bugSpray" ? Math.max(6, amount) : amount, multiplier, target };
 }
 
 export function predictConsole(state: GameState, performance: number, cost: number) {
-  const totalPower = state.staff.reduce((sum, member) => sum + member.code + member.scenario + member.art + member.sound, 0);
-  const expectedUsers = getConsoleInitialUsers(state.fans, totalPower, performance);
-  const energyModifier = getEnergyModifier(state.staff);
-  const direction = getDirectionConfig("重视品质");
-  const target = Math.round(560 * performance);
-  const lowGain = Math.max(.01, getGeneralProjectGain(totalPower, direction.speed, energyModifier, 0));
-  const highGain = Math.max(.01, getGeneralProjectGain(totalPower, direction.speed, energyModifier, 1));
-  return {
-    durationWeeks: { min: Math.ceil(target / highGain / 4), max: Math.ceil(target / lowGain / 4) },
-    userRange: { min: Math.round(expectedUsers * .9), max: Math.round(expectedUsers * 1.1) },
-    cashRatio: cost / Math.max(1, state.cash),
-  };
+  const forecast = forecastProject(state, {
+    kind: "console", name: "像素盒子", platform: "硬件研发", genre: "自研主机", theme: "次世代",
+    direction: "重视品质", progress: 0, target: Math.round(560 * performance),
+    fun: 0, creativity: 0, graphics: 0, sound: 0, bugs: 0, hype: 25,
+    consoleSpec: { cpu: "", media: "", body: "", performance, cost },
+  });
+  return { durationWeeks: forecast.durationWeeks, userRange: forecast.userRange, cashRatio: cost / Math.max(1, state.cash) };
 }
 
 export type ConsolePrediction = ReturnType<typeof predictConsole>;

@@ -13,7 +13,7 @@ import {
 } from "./rules.ts";
 import type { GameState, LegacySaveState, SaveState } from "./types";
 
-export const SAVE_SCHEMA_VERSION = 4;
+export const SAVE_SCHEMA_VERSION = 5;
 export const SAVE_STORAGE_KEY = "pixel-studio-save";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -45,7 +45,7 @@ export function migrateSave(value: unknown): GameState | null {
   const staff = (migrateUntouchedOpening ? INITIAL_STAFF : legacyStaff).map(
     normalizeStaff,
   );
-  const project =
+  const migratedProject =
     saved.project?.kind === "game" && !saved.project.stage
       ? {
           ...saved.project,
@@ -58,6 +58,12 @@ export function migrateSave(value: unknown): GameState | null {
           elapsedWeeks: 0,
         }
       : saved.project ?? null;
+  const project = migratedProject?.kind === "game"
+    ? {
+        ...migratedProject,
+        challengeCount: migratedProject.challengeCount ?? 0,
+      }
+    : migratedProject;
   const releases = (saved.releases ?? []).map((item) => ({
     ...item,
     genre: item.genre ?? "角色扮演",

@@ -65,6 +65,7 @@ test("legacy staff and stage-less game projects migrate to a resumable state", (
   assert.equal(migrated.project.stage, "coding");
   assert.equal(migrated.project.stageProgress, 12);
   assert.equal(migrated.project.leadStaffId, 9);
+  assert.equal(migrated.project.challengeCount, 0);
 });
 
 test("planning, production, debugging, contract and console interruptions round-trip", () => {
@@ -146,8 +147,53 @@ test("planning, production, debugging, contract and console interruptions round-
   ];
   for (const project of projects) {
     const state = { ...base, project };
-    assert.deepEqual(parseSave(JSON.stringify(serializeGameState(state))).project, project);
+    const expected = project.kind === "game" ? { ...project, challengeCount: 0 } : project;
+    assert.deepEqual(parseSave(JSON.stringify(serializeGameState(state))).project, expected);
   }
+});
+
+test("pending staff challenges round-trip for a resumable decision", () => {
+  const base = createInitialGameState();
+  const pendingChallenge = {
+    id: "存档挑战-1",
+    staffId: 1,
+    metric: "fun",
+    visualStage: "coding",
+    skill: 18,
+    baseSuccessRate: .6,
+    gainRange: { min: 6, max: 9 },
+    successHype: 8,
+    failureHypeLoss: 5,
+    failureBugs: 5,
+  };
+  const state = {
+    ...base,
+    project: {
+      kind: "game",
+      name: "待决挑战",
+      platform: "个人电脑",
+      genre: "桌游",
+      theme: "海盗",
+      direction: "均衡",
+      progress: 10,
+      target: 270,
+      fun: 6,
+      creativity: 5,
+      graphics: 4,
+      sound: 3,
+      bugs: 0,
+      hype: 2,
+      stage: "coding",
+      stageProgress: 4,
+      stageTarget: 55,
+      challengeCount: 1,
+      pendingChallenge,
+    },
+  };
+
+  const restored = parseSave(JSON.stringify(serializeGameState(state)));
+  assert.deepEqual(restored.project.pendingChallenge, pendingChallenge);
+  assert.equal(restored.project.challengeCount, 1);
 });
 
 test("an interrupted event or animation restores only the committed stable state", () => {

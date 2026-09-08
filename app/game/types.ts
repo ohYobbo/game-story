@@ -65,10 +65,27 @@ export type ResultData = {
   entries: ResultEntry[];
 };
 
+export type StaffChallengeMetric = "fun" | "creativity" | "graphics" | "sound";
+export type StaffChallengeInvestment = "steady" | "full";
+
+export type StaffChallengeOffer = {
+  id: string;
+  staffId: number;
+  metric: StaffChallengeMetric;
+  visualStage: Exclude<ProductionStage, "debug">;
+  skill: number;
+  baseSuccessRate: number;
+  gainRange: { min: number; max: number };
+  successHype: number;
+  failureHypeLoss: number;
+  failureBugs: number;
+};
+
 export type StageCreationPhase = "select" | "focus" | "create" | "result" | "resume";
 
 export type StageCreationData = {
   stage: Exclude<ProductionStage, "debug">;
+  kind?: "challenge";
   leadStaffId?: number;
   leadName: string;
   external: boolean;
@@ -120,6 +137,8 @@ export type Project = {
   sequelOf?: string;
   itemUses?: number;
   eventCount?: number;
+  challengeCount?: number;
+  pendingChallenge?: StaffChallengeOffer;
   directionPoints?: DirectionPoints;
   contentPopularity?: number;
   debugResearch?: number;
@@ -250,6 +269,7 @@ export type Modal =
   | "event"
   | "result"
   | "stage"
+  | "challenge"
   | null;
 
 export type RandomSource = () => number;

@@ -1,17 +1,21 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { ADVERTISING_METHODS, PLATFORMS, TRAINING_METHODS } from "../app/game/data.ts";
+import { ADVERTISING_METHODS, CONTRACTS, DIRECTIONS, PLATFORMS, TRAINING_METHODS } from "../app/game/data.ts";
 import { applyGameAction } from "../app/game/engine.ts";
 import {
   createGameProject,
   predictEarlyRelease,
+  predictContract,
+  predictConsole,
   predictGamePlan,
   predictMarketing,
   predictStageLead,
   predictTraining,
 } from "../app/game/predictions.ts";
 import { createInitialGameState } from "../app/game/rules.ts";
+
+import { forecastProject, simulateProject, seededRandom } from "../app/game/forecast.ts";
 
 function planInput(state = createInitialGameState()) {
   return {
@@ -45,6 +49,29 @@ test("plan prediction and project creation share the same starting formulas", ()
   assert.ok(prediction.qualityRange.min <= prediction.qualityRange.max);
   assert.equal(prediction.advantages.length, 2);
   assert.equal(prediction.risks.length, 2);
+});
+
+test("the planning interval covers the audited 42.5-week opening instead of promising 21-29 weeks", () => {
+  const input = planInput();
+  input.directionPoints.polish = 8;
+  const prediction = predictGamePlan(input);
+  assert.ok(prediction.durationWeeks.min <= 42.5 && prediction.durationWeeks.max >= 42.5,
+    `42.5 weeks must fit ${JSON.stringify(prediction.durationWeeks)}`);
+});
+
+test("the recommended lead ranks actual opening contribution, including energy and role fit", () => {
+  const initial = createInitialGameState();
+  const state = { ...initial, staff: [
+    { ...initial.staff[0], scenario: 50, energy: 11 },
+    { ...initial.staff[1], scenario: 45, energy: 100 },
+  ] };
+  const project = createGameProject(planInput(state));
+  const tired = predictStageLead(state, project, state.staff[0]);
+  const fit = predictStageLead(state, project, state.staff[1]);
+  assert.equal(fit.contributionLevel, "最佳");
+  assert.notEqual(tired.contributionLevel, "最佳");
+  assert.ok(tired.gapToBest > 0);
+  assert.equal(fit.gapToBest, 0);
 });
 
 test("stage-lead prediction contains the engine's committed tick result", () => {
@@ -138,4 +165,67 @@ test("early-release score and sales ranges contain actual review results", () =>
 
   assert.ok(score >= prediction.scoreRange.min && score <= prediction.scoreRange.max);
   assert.ok(review.sales >= prediction.salesRange.min && review.sales <= prediction.salesRange.max);
+});
+
+// Observed sample envelopes must cover at least 80% of independent completed holdouts.
+// Blocked runs are counted separately; no interval promises completion without available leads.
+test("engine forecasts cover independent seeds across directions, combinations and teams", () => {
+  const base = createInitialGameState();
+  for (const direction of DIRECTIONS) {
+    for (const size of [2, 4, 8]) {
+      const staff = Array.from({ length: size }, (_, index) => ({
+        ...base.staff[index % 2], id: index + 1,
+        energy: size === 4 ? 20 : 100,
+      }));
+      const state = { ...base, staff, lastStageLeads: size === 8 ? { planning: 2, coding: 1, graphics: 1, sound: 2 } : {} };
+      const input = { ...planInput(state), direction: direction.name, theme: size === 8 ? "历史" : "海盗" };
+      input.directionPoints.polish = 8;
+      const project = createGameProject(input);
+      const before = structuredClone(state);
+      const forecast = forecastProject(state, project);
+      assert.deepEqual(state, before, "preview must not mutate live state");
+      const holdouts = Array.from({ length: 32 }, (_, index) => simulateProject(state, project, seededRandom(index + 10001))).filter(run => !run.blocked);
+      if (!holdouts.length) { assert.ok(forecast.blockedRuns > 0); continue; }
+      assert.ok(forecast.durationWeeks && forecast.qualityRange);
+      const covered = holdouts.filter(run => {
+        const p = run.finalProject, quality = (p.fun + p.creativity + p.graphics + p.sound) / 4;
+        return run.weeks >= forecast.durationWeeks.min && run.weeks <= forecast.durationWeeks.max && quality >= forecast.qualityRange.min && quality <= forecast.qualityRange.max;
+      });
+      assert.ok(covered.length / holdouts.length >= .8, direction.name + "/" + size + ": " + covered.length + "/" + holdouts.length);
+    }
+  }
+});
+
+test("unavailable teams produce no misleading finite forecast and all material risks remain visible", () => {
+  const initial = createInitialGameState();
+  const input = planInput({ ...initial, cash: 0, staff: initial.staff.map(member => ({ ...member, resting: true, energy: 5 })) });
+  input.platform = { ...input.platform, retire: initial.year };
+  const prediction = predictGamePlan(input);
+  assert.equal(prediction.durationWeeks, null);
+  assert.equal(prediction.qualityRange, null);
+  for (const message of ["内部团队", "资金缺口", "退市", "体力偏低"]) assert.ok(prediction.risks.some(risk => risk.text.includes(message)));
+  const rested = { ...initial, staff: [{ ...initial.staff[0], scenario: 100, resting: true }, initial.staff[1]] };
+  const project = createGameProject(planInput(rested));
+  assert.equal(predictStageLead(rested, project, rested.staff[0]).contributionLevel, "休息");
+  assert.equal(predictStageLead(rested, project, rested.staff[1]).contributionLevel, "最佳");
+});
+
+test("contract deadline risk and console forecasts match independent production-engine runs", () => {
+  const initial = createInitialGameState();
+  const state = { ...initial, staff: initial.staff.map(member => ({ ...member, energy: 20 })) };
+  for (const contract of CONTRACTS) {
+    const prediction = predictContract(state, contract);
+    for (const seed of [2001, 2002, 2003]) {
+      const project = { kind: "contract", name: contract.name, platform: "委托", genre: "外包", theme: "", direction: "均衡", progress: 0, target: contract.target, fun: 0, creativity: 0, graphics: 0, sound: 0, bugs: 0, hype: 0, reward: contract.reward, elapsedWeeks: 0, deadlineWeeks: Number.MAX_SAFE_INTEGER, qualityTargets: contract.requirements };
+      const actual = simulateProject(state, project, seededRandom(seed));
+      assert.ok(actual.weeks >= prediction.durationWeeks.min && actual.weeks <= prediction.durationWeeks.max);
+      const timed = simulateProject(state, { ...project, deadlineWeeks: contract.deadline }, seededRandom(seed));
+      assert.equal(timed.state.cash > state.cash, actual.weeks <= contract.deadline);
+    }
+  }
+  const prediction = predictConsole(state, 1.2, 200);
+  const project = { kind: "console", name: "主机", platform: "硬件研发", genre: "自研主机", theme: "次世代", direction: "重视品质", progress: 0, target: Math.round(560 * 1.2), fun: 0, creativity: 0, graphics: 0, sound: 0, bugs: 0, hype: 25, consoleSpec: { cpu: "", media: "", body: "", performance: 1.2, cost: 200 } };
+  const actual = simulateProject(state, project, seededRandom(3001));
+  assert.ok(actual.weeks >= prediction.durationWeeks.min && actual.weeks <= prediction.durationWeeks.max);
+  assert.ok(actual.state.consoleUsers >= prediction.userRange.min && actual.state.consoleUsers <= prediction.userRange.max);
 });

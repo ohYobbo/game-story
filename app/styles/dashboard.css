@@ -412,3 +412,11 @@
     rgba(2, 9, 21, .83);
   backdrop-filter: blur(2px);
 }
+.save-error {
+  padding: 10px 14px;
+  border: 2px solid #a53f36;
+  color: #742e28;
+  background: #fff0df;
+  font-size: 13px;
+  line-height: 1.5;
+}

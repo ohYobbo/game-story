@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type AnimationEvent } from "react";
 
 import { STAGE_INFO } from "../game/data";
 import type { Staff, StageCreationPhase, StageCreationState, WorkerBehavior } from "../game/types";
-import { PixelPerson, ResultEntries, UiIcon } from "./pixel-ui";
+import { PixelPerson, ResultEntries, UiIcon, useModalDialog } from "./pixel-ui";
 
 const STAGE_VISUALS: Record<
   StageCreationState["stage"],
@@ -43,6 +43,13 @@ const FALLBACK_DELAYS: Record<Exclude<StageCreationPhase, "select">, number> = {
   resume: 800,
 };
 
+const CHALLENGE_FALLBACK_DELAYS: Record<Exclude<StageCreationPhase, "select">, number> = {
+  focus: 650,
+  create: 1_200,
+  result: 8_000,
+  resume: 500,
+};
+
 function useReducedMotion() {
   const [reduced, setReduced] = useState(false);
 
@@ -68,16 +75,21 @@ export function StageCreationOverlay({
 }) {
   const reducedMotion = useReducedMotion();
   const resultButtonRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useModalDialog(creation.phase !== "select");
+  const creationKind = creation.phase === "select" ? undefined : creation.kind;
 
   useEffect(() => {
     if (creation.phase === "select") return;
     if (creation.phase === "result") resultButtonRef.current?.focus();
+    const fallbackDelays = creationKind === "challenge"
+      ? CHALLENGE_FALLBACK_DELAYS
+      : FALLBACK_DELAYS;
     const delay = reducedMotion && creation.phase !== "result"
       ? creation.phase === "focus" ? 180 : 40
-      : FALLBACK_DELAYS[creation.phase];
+      : fallbackDelays[creation.phase];
     const timer = window.setTimeout(() => onAdvance(creation.phase), delay);
     return () => window.clearTimeout(timer);
-  }, [creation.phase, onAdvance, reducedMotion]);
+  }, [creation.phase, creationKind, onAdvance, reducedMotion]);
 
   if (creation.phase === "select") return null;
 
@@ -86,12 +98,13 @@ export function StageCreationOverlay({
   const actor = creation.leadStaffId
     ? staff.find((member) => member.id === creation.leadStaffId)
     : undefined;
+  const challenge = creation.kind === "challenge";
   const title = creation.phase === "focus"
-    ? `聚焦 ${creation.leadName}`
+    ? challenge ? `${creation.leadName} 主动请缨` : `聚焦 ${creation.leadName}`
     : creation.phase === "create"
-      ? `${stage.label}进行中`
+      ? challenge ? `${creation.skillLabel}挑战进行中` : `${stage.label}进行中`
       : creation.phase === "resume"
-        ? `${stage.short}阶段开始推进`
+        ? challenge ? "挑战结束，恢复开发" : `${stage.short}阶段开始推进`
         : creation.result.title;
 
   const handleAnimationEnd = (event: AnimationEvent<HTMLDivElement>) => {
@@ -100,16 +113,20 @@ export function StageCreationOverlay({
   };
 
   return (
-    <div
-      className={`stage-creation-backdrop phase-${creation.phase} stage-${creation.stage} ${reducedMotion ? "is-reduced" : ""}`}
-      role="dialog"
+    <dialog
+      ref={dialogRef}
+      className={`stage-creation-backdrop phase-${creation.phase} stage-${creation.stage} ${challenge ? "is-challenge" : ""} ${reducedMotion ? "is-reduced" : ""}`}
       aria-modal="true"
-      aria-label={`${stage.label}创作演出`}
+      aria-label={challenge ? `${creation.skillLabel}员工挑战演出` : `${stage.label}创作演出`}
+      onCancel={(event) => {
+        event.preventDefault();
+        if (creation.phase === "result") onAdvance("result");
+      }}
     >
       <section className="stage-creation-panel">
         <div className="stage-sequence-marker" onAnimationEnd={handleAnimationEnd}>
           <header className="stage-creation-heading">
-            <span>PHASE {stage.short}</span>
+            <span>{challenge ? "CHALLENGE" : "PHASE"} {challenge ? creation.skillLabel : stage.short}</span>
             <h2>{title}</h2>
             {creation.phase !== "result" && (
               <p>{creation.leadName} · {creation.roleFit} · {creation.skillLabel} {creation.effectiveSkill.toFixed(1)}</p>
@@ -144,12 +161,12 @@ export function StageCreationOverlay({
               <p>{creation.result.summary}</p>
               <ResultEntries entries={creation.result.entries} />
               <button ref={resultButtonRef} className="primary-button" onClick={() => onAdvance("result")}>
-                确认成果 · 开始推进
+                {challenge ? "确认结果 · 继续开发" : "确认成果 · 开始推进"}
               </button>
             </div>
           )}
         </div>
       </section>
-    </div>
+    </dialog>
   );
 }

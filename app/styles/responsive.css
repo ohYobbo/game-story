@@ -220,6 +220,13 @@
   .mini-avatar { width: 34px; height: 41px; }
   .review-scores { gap: 3px; }
   .review-scores div { border-width: 2px; }
+  .challenge-hero { grid-template-columns: 52px 1fr; gap: 8px; padding: 8px; border-width: 2px; }
+  .challenge-avatar { width: 46px; height: 46px; border-width: 2px; }
+  .challenge-hero b { font-size: 11px; }
+  .challenge-forecast,
+  .challenge-options { grid-template-columns: 1fr; gap: 5px; }
+  .challenge-forecast > span { padding: 6px; border-width: 2px; }
+  .challenge-options button { min-height: 52px; padding: 7px; border-width: 2px; }
 }
 
 @media (max-height: 690px) {

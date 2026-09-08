@@ -40,11 +40,15 @@ import {
 } from "./rules.ts";
 import {
   CONTINUOUS_LEAD_MULTIPLIER,
+  STAFF_CHALLENGE_INVESTMENTS,
+  STAFF_CHALLENGE_METRICS,
+  getStaffChallengeSuccessRate,
+  getStaffChallengeTarget,
   predictItemUse,
   predictMarketing,
   predictTraining,
   rollStageLeadOpening,
-} from "./predictions.ts";
+} from "./operations.ts";
 import type {
   EventData,
   FanSegments,
@@ -55,6 +59,8 @@ import type {
   ResultData,
   ReviewData,
   StageCreationData,
+  StaffChallengeInvestment,
+  StaffChallengeOffer,
 } from "./types";
 
 export type EngineEffect =
@@ -63,7 +69,8 @@ export type EngineEffect =
   | { type: "toast"; message: string }
   | { type: "result"; result: ResultData }
   | { type: "pause-for-stage"; stage: Exclude<NonNullable<Project["stage"]>, "debug"> }
-  | { type: "stage-creation"; creation: StageCreationData };
+  | { type: "stage-creation"; creation: StageCreationData }
+  | { type: "staff-challenge"; offer: StaffChallengeOffer };
 
 export type EngineResult = {
   state: GameState;
@@ -71,7 +78,7 @@ export type EngineResult = {
 };
 
 export type GameAction =
-  | { type: "tick"; isNewWeek: boolean }
+  | { type: "tick"; isNewWeek: boolean; allowStaffChallenge?: boolean }
   | { type: "scheduled-event" }
   | { type: "start-project"; project: Project; cost?: number }
   | {
@@ -99,6 +106,11 @@ export type GameAction =
     }
   | { type: "use-item"; key: keyof Inventory }
   | { type: "change-career"; staffId: number; role: string }
+  | {
+      type: "resolve-staff-challenge";
+      offerId: string;
+      investment: StaffChallengeInvestment | "skip";
+    }
   | {
       type: "attend-expo";
       cost: number;
@@ -428,10 +440,151 @@ function advanceStaffEnergy(state: GameState): GameState {
   };
 }
 
+function createStaffChallengeOffer(
+  state: GameState,
+  project: Project,
+  random: RandomSource,
+): StaffChallengeOffer | null {
+  const eligible = state.staff.filter((member) => {
+    const [, target] = getStaffChallengeTarget(member);
+    return !member.resting && member.energy >= 30 && member[target.skill] >= 8;
+  });
+  if (!eligible.length) return null;
+
+  const member = eligible[Math.min(eligible.length - 1, Math.floor(random() * eligible.length))];
+  const [metric, target] = getStaffChallengeTarget(member);
+  const skill = member[target.skill];
+  const baseSuccessRate = clamp(.28 + skill * .01 + member.energy * .0015, .38, .7);
+  const minGain = Math.max(4, Math.round(skill * .35));
+  const challengeNumber = (project.challengeCount ?? 0) + 1;
+  return {
+    id: `${project.name}-${state.year}-${state.month}-${state.week}-${challengeNumber}-${member.id}`,
+    staffId: member.id,
+    metric,
+    visualStage: target.visualStage,
+    skill,
+    baseSuccessRate,
+    gainRange: { min: minGain, max: minGain + Math.max(3, Math.round(skill * .18)) },
+    successHype: 8,
+    failureHypeLoss: 5,
+    failureBugs: 5,
+  };
+}
+
+function resolveStaffChallenge(
+  state: GameState,
+  offerId: string,
+  investment: StaffChallengeInvestment | "skip",
+  random: RandomSource,
+): EngineResult {
+  const current = state.project;
+  const offer = current?.kind === "game" ? current.pendingChallenge : undefined;
+  if (!current || current.kind !== "game" || !offer || offer.id !== offerId) {
+    return noEffects(state);
+  }
+
+  const clearedProject = { ...current, pendingChallenge: undefined };
+  const member = state.staff.find((item) => item.id === offer.staffId);
+  if (investment === "skip") {
+    return {
+      state: { ...state, project: clearedProject },
+      effects: [{
+        type: "toast",
+        message: `${member?.name ?? "员工"}收起了挑战方案，团队继续按原计划开发`,
+      }],
+    };
+  }
+
+  const option = STAFF_CHALLENGE_INVESTMENTS.find((item) => item.id === investment);
+  if (!option) return noEffects(state);
+  if (state.cash < option.cashCost || state.research < option.researchCost) {
+    return {
+      state,
+      effects: [{ type: "toast", message: "资金或研究点不足，无法支持这次挑战" }],
+    };
+  }
+  if (!member || member.resting || member.energy < 30) {
+    return {
+      state,
+      effects: [{ type: "toast", message: "发起挑战的员工当前无法继续创作" }],
+    };
+  }
+
+  const metricInfo = STAFF_CHALLENGE_METRICS[offer.metric];
+  const successRate = getStaffChallengeSuccessRate(offer, investment);
+  const success = random() < successRate;
+  const qualityGain = success
+    ? Math.round(offer.gainRange.min + (offer.gainRange.max - offer.gainRange.min) * random())
+    : 0;
+  const nextHype = success
+    ? current.hype + offer.successHype
+    : Math.max(0, current.hype - offer.failureHypeLoss);
+  const hypeChange = Number((nextHype - current.hype).toFixed(1));
+  const nextProject: Project = success
+    ? {
+        ...clearedProject,
+        [offer.metric]: current[offer.metric] + qualityGain,
+        hype: nextHype,
+      }
+    : {
+        ...clearedProject,
+        hype: nextHype,
+        bugs: current.bugs + offer.failureBugs,
+      };
+  const entries = [
+    { category: "resource" as const, label: "挑战预算", value: `-${formatCash(option.cashCost)}`, tone: "negative" as const },
+    { category: "resource" as const, label: "研究投入", value: `-${option.researchCost}`, tone: "negative" as const },
+    success
+      ? { category: "quality" as const, label: metricInfo.label, value: `+${qualityGain}`, tone: "positive" as const }
+      : { category: "risk" as const, label: "漏洞", value: `+${offer.failureBugs}`, tone: "negative" as const },
+    {
+      category: success ? "quality" as const : "risk" as const,
+      label: "热度",
+      value: `${hypeChange >= 0 ? "+" : ""}${hypeChange}`,
+      tone: hypeChange > 0 ? "positive" as const : hypeChange < 0 ? "negative" as const : "neutral" as const,
+      detail: hypeChange === 0 ? "当前热度已为 0" : undefined,
+    },
+  ];
+
+  return {
+    state: {
+      ...state,
+      cash: state.cash - option.cashCost,
+      research: state.research - option.researchCost,
+      project: nextProject,
+      industryNews: success
+        ? `${member.name}的${metricInfo.label}挑战成功，作品关注度上升。`
+        : `${member.name}的${metricInfo.label}挑战失手，团队开始修补新增漏洞。`,
+    },
+    effects: [{
+      type: "stage-creation",
+      creation: {
+        kind: "challenge",
+        stage: offer.visualStage,
+        leadStaffId: member.id,
+        leadName: member.name,
+        external: false,
+        repeated: false,
+        roleFit: `${option.name} · 成功率 ${Math.round(successRate * 100)}%`,
+        skillLabel: metricInfo.label,
+        effectiveSkill: offer.skill,
+        result: {
+          title: success ? `${metricInfo.label}挑战成功！` : `${metricInfo.label}挑战失败……`,
+          summary: success
+            ? `${member.name}的主动尝试奏效，真实品质和热度变化已计入《${current.name}》。`
+            : `${member.name}的尝试没有达到预期，投入与风险变化已计入《${current.name}》。`,
+          entries,
+        },
+      },
+    }],
+  };
+}
+
 function advanceProject(
   state: GameState,
   staffBeforeTick: GameState["staff"],
   isNewWeek: boolean,
+  allowStaffChallenge: boolean,
   random: RandomSource,
 ): EngineResult {
   const current = state.project;
@@ -520,7 +673,28 @@ function advanceProject(
     const effects: EngineEffect[] = [];
     let fans = state.fans;
     let industryNews = state.industryNews;
+    let challengeTriggered = false;
     if (
+      allowStaffChallenge &&
+      isNewWeek &&
+      (project.challengeCount ?? 0) < 2 &&
+      (project.elapsedWeeks ?? 0) >= 2 + (project.challengeCount ?? 0) * 3 &&
+      (project.stageProgress ?? 0) < (project.stageTarget ?? 1) * .82 &&
+      random() < .3
+    ) {
+      const offer = createStaffChallengeOffer(state, project, random);
+      if (offer) {
+        project = {
+          ...project,
+          challengeCount: (project.challengeCount ?? 0) + 1,
+          pendingChallenge: offer,
+        };
+        effects.push({ type: "staff-challenge", offer });
+        challengeTriggered = true;
+      }
+    }
+    if (
+      !challengeTriggered &&
       isNewWeek &&
       (project.eventCount ?? 0) < 2 &&
       (project.elapsedWeeks ?? 0) >= 2 &&
@@ -690,8 +864,10 @@ function advanceProject(
 function tick(
   state: GameState,
   isNewWeek: boolean,
+  allowStaffChallenge: boolean,
   random: RandomSource,
 ): EngineResult {
+  if (state.project?.pendingChallenge) return noEffects(state);
   const staffBeforeTick = state.staff;
   const weeklyResult = isNewWeek ? advanceWeeklySales(state) : noEffects(state);
   const energyState = advanceStaffEnergy(weeklyResult.state);
@@ -699,6 +875,7 @@ function tick(
     energyState,
     staffBeforeTick,
     isNewWeek,
+    allowStaffChallenge,
     random,
   );
   return {
@@ -1349,7 +1526,7 @@ export function applyGameAction(
 ): EngineResult {
   switch (action.type) {
     case "tick":
-      return tick(state, action.isNewWeek, random);
+      return tick(state, action.isNewWeek, action.allowStaffChallenge ?? false, random);
     case "scheduled-event":
       return applyScheduledEvent(state, random);
     case "start-project":
@@ -1370,6 +1547,8 @@ export function applyGameAction(
       return applyItemAction(state, action.key);
     case "change-career":
       return changeCareer(state, action.staffId, action.role);
+    case "resolve-staff-challenge":
+      return resolveStaffChallenge(state, action.offerId, action.investment, random);
     case "attend-expo":
       if (state.cash < action.cost) {
         return {

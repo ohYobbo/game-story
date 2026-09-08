@@ -190,10 +190,11 @@ test("wires the complete generated pixel-art system into the product", async () 
     "result",
     "event",
     "review",
+    "challenge",
   ]) {
     assert.match(components, new RegExp('modal === "' + modal + '"'));
   }
-  assert.equal(components.match(/<ModalShell/g)?.length, 15);
+  assert.equal(components.match(/<ModalShell/g)?.length, 16);
   for (const feedback of [
     "企划确认摘要",
     "常规周期",
@@ -201,6 +202,9 @@ test("wires the complete generated pixel-art system into the product", async () 
     "逾期风险",
     "有效热度",
     "提前发售",
+    "基础成功率",
+    "失败后果",
+    "跳过挑战",
     "ResultEntries",
   ]) {
     assert.match(components, new RegExp(feedback));
@@ -222,8 +226,6 @@ test("wires the complete generated pixel-art system into the product", async () 
   );
   assert.match(components, /function UiIcon/);
   assert.match(components, /function StaffAvatar/);
-  assert.match(components, /event\.key !== "Escape"/);
-  assert.match(components, /previousFocus\?\.focus\(\)/);
   for (const phase of ["focus", "create", "result", "resume"]) {
     assert.match(styles, new RegExp("\\.phase-" + phase));
   }
@@ -232,6 +234,8 @@ test("wires the complete generated pixel-art system into the product", async () 
   }
   assert.match(components, /onAnimationEnd=\{handleAnimationEnd\}/);
   assert.match(components, /FALLBACK_DELAYS/);
+  assert.match(components, /CHALLENGE_FALLBACK_DELAYS/);
+  assert.match(components, /is-challenge/);
   assert.match(components, /prefers-reduced-motion: reduce/);
   assert.match(components, /确认成果 · 开始推进/);
   assert.match(styles, /prefers-reduced-motion:\s*reduce/);

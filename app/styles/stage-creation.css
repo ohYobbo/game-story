@@ -9,7 +9,7 @@
 }
 
 .stage-creation-backdrop {
-  position: absolute;
+  position: fixed;
   z-index: 60;
   inset: 0;
   display: grid;
@@ -51,6 +51,22 @@
 
 .phase-resume .stage-sequence-marker {
   animation: stageResumeOut .45s steps(4, end) both;
+}
+
+.is-challenge.phase-focus .stage-sequence-marker {
+  animation-duration: .36s;
+}
+
+.is-challenge.phase-create .stage-sequence-marker {
+  animation-duration: .85s;
+}
+
+.is-challenge.phase-resume .stage-sequence-marker {
+  animation-duration: .3s;
+}
+
+.is-challenge .stage-creation-scene {
+  min-height: 300px;
 }
 
 .stage-creation-heading {

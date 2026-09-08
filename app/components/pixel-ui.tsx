@@ -134,6 +134,25 @@ export function PixelPerson({
   );
 }
 
+export function useModalDialog(active = true) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!active || !dialog) return;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    dialog.showModal();
+    return () => {
+      dialog.close();
+      if (previousFocus?.isConnected && !previousFocus.closest("dialog")) {
+        previousFocus.focus();
+      } else if (!document.querySelector("dialog[open]")) {
+        document.querySelector<HTMLButtonElement>(".utility-row button:not(:disabled)")?.focus();
+      }
+    };
+  }, [active]);
+  return dialogRef;
+}
+
 export function ModalShell({
   title,
   children,
@@ -143,44 +162,23 @@ export function ModalShell({
   children: ReactNode;
   onClose: () => void;
 }) {
-  const closeButtonRef = useRef<HTMLButtonElement>(null);
-  const onCloseRef = useRef(onClose);
-
-  useEffect(() => {
-    onCloseRef.current = onClose;
-  }, [onClose]);
-
-  useEffect(() => {
-    const previousFocus =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    closeButtonRef.current?.focus();
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      onCloseRef.current();
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-      previousFocus?.focus();
-    };
-  }, []);
+  const dialogRef = useModalDialog();
 
   return (
-    <div
+    <dialog
+      ref={dialogRef}
       className="modal-backdrop"
-      role="presentation"
+      aria-label={title}
+      onCancel={(event) => { event.preventDefault(); onClose(); }}
       onMouseDown={(event) => event.target === event.currentTarget && onClose()}
     >
-      <section className="pixel-modal" role="dialog" aria-modal="true" aria-label={title}>
+      <section className="pixel-modal">
         <header className="modal-title">
           <span>{title}</span>
-          <button ref={closeButtonRef} className="close-button" onClick={onClose} aria-label="关闭">×</button>
+          <button className="close-button" onClick={onClose} aria-label="关闭">×</button>
         </header>
         <div className="modal-body">{children}</div>
       </section>
-    </div>
+    </dialog>
   );
 }

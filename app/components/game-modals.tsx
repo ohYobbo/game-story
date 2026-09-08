@@ -33,6 +33,10 @@ import {
   predictMarketing,
   predictStageLead,
   predictTraining,
+  getStaffChallengeSuccessRate,
+  STAFF_CHALLENGE_INVESTMENTS,
+  STAFF_CHALLENGE_METRICS,
+  STAFF_CHALLENGE_SUCCESS_CAP,
   type ConsolePrediction,
   type GamePlanPrediction,
 } from "../game/predictions";
@@ -47,6 +51,7 @@ import type {
   ReviewData,
   ResultData,
   Staff,
+  StaffChallengeInvestment,
 } from "../game/types";
 import { ModalShell, ResultEntries, StaffAvatar, UiIcon } from "./pixel-ui";
 
@@ -68,7 +73,7 @@ type GameModalsProps = {
   review: ReviewData | null;
   resultData: ResultData | null;
   planPrediction: GamePlanPrediction | null;
-  consolePrediction: ConsolePrediction;
+  consolePrediction: ConsolePrediction | null;
   selectedStaff: Staff | null;
   availablePlatforms: Platform[];
   sequelCandidates: GameState["releases"];
@@ -127,6 +132,7 @@ type GameModalsProps = {
     gainedHype: number,
     label: string,
   ) => void;
+  resolveStaffChallenge: (investment: StaffChallengeInvestment | "skip") => void;
 };
 
 export function GameModals({
@@ -188,6 +194,7 @@ export function GameModals({
   hireWithMethod,
   advertise,
   attendExpo,
+  resolveStaffChallenge,
 }: GameModalsProps) {
   const {
     cash,
@@ -214,6 +221,13 @@ export function GameModals({
     endingShown,
     endingScore,
   } = game;
+  const pendingChallenge = project?.kind === "game" ? project.pendingChallenge : undefined;
+  const challengeMember = pendingChallenge
+    ? staff.find((member) => member.id === pendingChallenge.staffId)
+    : undefined;
+  const challengeMetric = pendingChallenge
+    ? STAFF_CHALLENGE_METRICS[pendingChallenge.metric]
+    : undefined;
 
   return (
     <>
@@ -297,11 +311,11 @@ export function GameModals({
                 </div>
                 {planPrediction && (
                   <section className="prediction-panel" aria-label="企划预测摘要">
-                    <div className="prediction-title"><b>企划确认摘要</b><small>区间按当前团队及最佳内部负责人估算，随机开发事件可能改变结果</small></div>
+                    <div className="prediction-title"><b>企划确认摘要</b><small>64 次固定样本的观测范围，并非保证；每阶段选择开工品质最高的可用内部负责人，跳过员工挑战，不追加培训、宣传或道具</small></div>
                     <div className="prediction-metrics">
                       <span><small>开发总成本</small><b>{formatCash(planPrediction.cost)}</b><em>现金 {Math.round(planPrediction.cashRatio * 100)}%</em></span>
-                      <span><small>常规周期</small><b>{planPrediction.durationWeeks.min}–{planPrediction.durationWeeks.max} 周</b><em>含预计除错</em></span>
-                      <span><small>品质倾向</small><b>{planPrediction.qualityLevel}</b><em>{planPrediction.qualityRange.min}–{planPrediction.qualityRange.max}</em></span>
+                      <span><small>常规周期</small><b>{planPrediction.durationWeeks ? `${planPrediction.durationWeeks.min}–${planPrediction.durationWeeks.max} 周` : "无法估计"}</b><em>含预计除错</em></span>
+                      <span><small>品质倾向</small><b>{planPrediction.qualityLevel}</b><em>{planPrediction.qualityRange ? `${planPrediction.qualityRange.min}–${planPrediction.qualityRange.max}` : "无可完成样本"}</em></span>
                       <span><small>现金 / 风险</small><b>{planPrediction.cashPressure} / {planPrediction.riskLevel}</b><em>确认前检查</em></span>
                       <span><small>平台市场</small><b>{planPrediction.marketLevel} · {formatUsers(planPrediction.marketUsers)}</b><em>{planPrediction.platformYearsRemaining === null ? "长期运营" : `剩余 ${planPrediction.platformYearsRemaining} 年`}</em></span>
                       <span><small>核心受众</small><b>{planPrediction.audience}</b><em>{planPrediction.audienceChanges.join(" · ")}</em></span>
@@ -320,7 +334,7 @@ export function GameModals({
           </ModalShell>
         )}
 
-        {modal === "console" && (
+        {modal === "console" && consolePrediction && (
           <ModalShell title="自研主机实验室" onClose={() => setModal("develop")}>
             <p className="modal-intro">选择 CPU、媒体与机型。规格越高，研发周期与成本越大，首发用户也越多。</p>
             <div className="console-builder">
@@ -330,8 +344,8 @@ export function GameModals({
               <div className="console-spec-summary">
                 <span><small>综合性能</small><b>×{selectedConsoleSpec.performance.toFixed(2)}</b></span>
                 <span><small>研发预算</small><b>{formatCash(selectedConsoleSpec.cost)}</b></span>
-                <span><small>预计周期</small><b>{consolePrediction.durationWeeks.min}–{consolePrediction.durationWeeks.max} 周</b></span>
-                <span><small>初期用户</small><b>{formatUsers(consolePrediction.userRange.min)}–{formatUsers(consolePrediction.userRange.max)}</b></span>
+                <span><small>预计周期</small><b>{consolePrediction.durationWeeks ? `${consolePrediction.durationWeeks.min}–${consolePrediction.durationWeeks.max} 周` : "无法估计"}</b></span>
+                <span><small>初期用户</small><b>{consolePrediction.userRange ? `${formatUsers(consolePrediction.userRange.min)}–${formatUsers(consolePrediction.userRange.max)}` : "无法估计"}</b></span>
                 <span><small>工程门槛</small><b>{hardwareEngineerCount} 名工程师</b></span>
                 <span><small>现金压力</small><b>{Math.round(consolePrediction.cashRatio * 100)}%</b></span>
               </div>
@@ -362,7 +376,7 @@ export function GameModals({
                       <b>{member.name}<em>{prediction.contributionLevel}</em></b>
                       <small>{member.role} · {prediction.roleFit} · 体力 {Math.round(member.energy)}%{prediction.mayRest ? " · 可能中途休息" : ""}</small>
                       <small>{member.resting || member.energy <= 10 ? "正在休息 · 暂时无法负责" : `开工进度 ${prediction.openingProgressRange.min.toFixed(1)}–${prediction.openingProgressRange.max.toFixed(1)} · 开工品质 ${prediction.openingQualityRange.min.toFixed(1)}–${prediction.openingQualityRange.max.toFixed(1)}`}</small>
-                      {!member.resting && member.energy > 10 && <small>开工体力 -{prediction.openingEnergyCost.toFixed(1)} · {prediction.gapToBest > 0 ? `比最佳低 ${prediction.gapToBest.toFixed(1)}` : "团队最佳"}</small>}
+                      {!member.resting && member.energy > 10 && <small>开工体力 -{prediction.openingEnergyCost.toFixed(1)} · {prediction.gapToBest > 0 ? `开工品质比最佳低 ${prediction.gapToBest.toFixed(1)}` : "团队最佳"}</small>}
                       {prediction.repeated && <small className="lead-warning">上次同阶段负责人 · 能力 -{prediction.repeatPenalty}%</small>}
                     </span>
                     <strong>{prediction.skillLabel} {prediction.effectiveSkill.toFixed(1)}</strong>
@@ -404,7 +418,7 @@ export function GameModals({
                           ? `第 ${contract.level} 阶段办公室解锁`
                           : `限期 ${contract.deadline} 周 · ${Object.entries(contract.requirements).map(([key, value]) => `${CONTRACT_QUALITY_LABELS[key as keyof typeof CONTRACT_QUALITY_LABELS]} ${value}`).join(" · ")}`}
                       </small>
-                      {companyLevel >= contract.level && <small>团队产能 {prediction.teamPower} · 预计 {prediction.durationWeeks.min}–{prediction.durationWeeks.max} 周 · 逾期风险 {prediction.risk}</small>}
+                      {companyLevel >= contract.level && <small>团队产能 {prediction.teamPower} · 达标预计 {prediction.durationWeeks ? `${prediction.durationWeeks.min}–${prediction.durationWeeks.max} 周` : "无法估计"} · 逾期风险 {prediction.risk}</small>}
                     </span>
                     <strong>{formatCash(contract.reward)}</strong>
                   </button>
@@ -618,6 +632,52 @@ export function GameModals({
                   <strong>{item.sales.toLocaleString()} 套<small>本周 {(item.weeklySales ?? 0).toLocaleString()} · 第 {item.weeklyRank ?? "—"} 名</small></strong>
                 </div>
               )) : <p>还没有发售作品。第一部传奇正等着你！</p>}
+            </div>
+          </ModalShell>
+        )}
+
+        {modal === "challenge" && pendingChallenge && challengeMetric && (
+          <ModalShell title="员工主动挑战" onClose={() => resolveStaffChallenge("skip")}>
+            <div className="challenge-sheet">
+              <div className="challenge-hero">
+                {challengeMember && <StaffAvatar staff={challengeMember} className="challenge-avatar" />}
+                <span>
+                  <b>{challengeMember?.name ?? "原挑战员工"} 主动请缨</b>
+                  <small>{challengeMember?.role ?? "员工已离开，请跳过挑战"} · {challengeMetric.label}能力 {pendingChallenge.skill}</small>
+                  <p>“我有一个提升《{project?.name ?? "当前作品"}》{challengeMetric.label}的点子，请让我试试看！”</p>
+                </span>
+              </div>
+              <div className="challenge-forecast" aria-label="挑战结果预测">
+                <span><small>基础成功率</small><b>{Math.round(pendingChallenge.baseSuccessRate * 100)}%</b><em>投入后最高 {Math.round(STAFF_CHALLENGE_SUCCESS_CAP * 100)}%</em></span>
+                <span><small>成功收益</small><b>{challengeMetric.label} +{pendingChallenge.gainRange.min}–{pendingChallenge.gainRange.max}</b><em>热度 +{pendingChallenge.successHype}</em></span>
+                <span className="is-risk"><small>失败后果</small><b>热度 -{pendingChallenge.failureHypeLoss}</b><em>漏洞 +{pendingChallenge.failureBugs}</em></span>
+              </div>
+              <div className="challenge-options">
+                <button className="challenge-skip" onClick={() => resolveStaffChallenge("skip")}>
+                  <span><b>跳过挑战</b><small>不投入资源，继续原计划</small></span>
+                  <strong>0 成本</strong>
+                </button>
+                {STAFF_CHALLENGE_INVESTMENTS.map((option) => {
+                  const successRate = getStaffChallengeSuccessRate(pendingChallenge, option.id);
+                  const unavailable = !challengeMember || challengeMember.resting || challengeMember.energy < 30
+                    ? "员工当前无法创作"
+                    : cash < option.cashCost
+                    ? "资金不足"
+                    : research < option.researchCost
+                      ? "研究点不足"
+                      : `成功率 +${Math.round(option.chanceBonus * 100)}%`;
+                  return (
+                    <button
+                      key={option.id}
+                      onClick={() => resolveStaffChallenge(option.id)}
+                      disabled={!challengeMember || challengeMember.resting || challengeMember.energy < 30 || cash < option.cashCost || research < option.researchCost}
+                    >
+                      <span><b>{option.name}</b><small>{formatCash(option.cashCost)} · 研究 {option.researchCost}</small></span>
+                      <strong>{Math.round(successRate * 100)}%<small>{unavailable}</small></strong>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </ModalShell>
         )}

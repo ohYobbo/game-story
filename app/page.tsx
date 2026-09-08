@@ -41,7 +41,8 @@ import {
   predictExternalLead,
   predictGamePlan,
 } from "./game/predictions";
-import { parseSave, SAVE_STORAGE_KEY, serializeGameState } from "./game/save";
+import { SAVE_STORAGE_KEY } from "./game/save";
+import { startGamePersistence } from "./game/persistence";
 import { advanceStageCreation } from "./game/stage-sequence";
 import { useGameController } from "./game/use-game-controller";
 import type { EngineEffect } from "./game/engine";
@@ -56,6 +57,7 @@ import type {
   ResultData,
   ReviewData,
   Staff,
+  StaffChallengeInvestment,
   StageCreationPhase,
   StageCreationState,
 } from "./game/types";
@@ -63,6 +65,7 @@ import type {
 export default function Home() {
   const {
     game,
+    gameRef,
     replaceGame,
     dispatchGame,
     setCash,
@@ -116,6 +119,8 @@ export default function Home() {
   const [stageCreation, setStageCreation] = useState<StageCreationState | null>(null);
   const stageCreationRef = useRef(stageCreation);
   const tickRef = useRef(0);
+  const persistenceRef = useRef<ReturnType<typeof startGamePersistence> | null>(null);
+  const [saveError, setSaveError] = useState("");
 
   const replaceStageCreation = useCallback((next: StageCreationState | null) => {
     stageCreationRef.current = next;
@@ -123,10 +128,20 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const saved = parseSave(window.localStorage.getItem(SAVE_STORAGE_KEY));
-    if (!saved) return;
-    replaceGame(saved);
-  }, [replaceGame]);
+    const persistence = startGamePersistence(
+      () => window.localStorage,
+      () => gameRef.current,
+      replaceGame,
+      setSaveError,
+    );
+    persistenceRef.current = persistence;
+    return () => {
+      persistence.dispose();
+      persistenceRef.current = null;
+    };
+  }, [gameRef, replaceGame]);
+
+  const persistGame = useCallback(() => persistenceRef.current?.save() ?? false, []);
 
   const availablePlatforms = useMemo(() => {
     return getAvailablePlatforms(year, ownConsole, consoleUsers);
@@ -160,7 +175,7 @@ export default function Home() {
   const selectedGameGenre = selectedSequel?.genre ?? selectedGenre;
   const selectedGameTheme = selectedSequel?.theme ?? selectedTheme;
   const selectedPlatformData = availablePlatforms.find((item) => item.name === selectedPlatform) ?? availablePlatforms[0];
-  const planPrediction = useMemo(() => selectedPlatformData
+  const planPrediction = useMemo(() => modal === "develop" && selectedPlatformData
     ? predictGamePlan({
         state: game,
         name: gameName,
@@ -171,11 +186,11 @@ export default function Home() {
         directionPoints: selectedDirectionPoints,
         sequel: selectedSequel,
       })
-    : null, [game, gameName, selectedPlatformData, selectedGameGenre, selectedGameTheme, selectedDirection, selectedDirectionPoints, selectedSequel]);
+    : null, [modal, game, gameName, selectedPlatformData, selectedGameGenre, selectedGameTheme, selectedDirection, selectedDirectionPoints, selectedSequel]);
   const selectedDevelopmentCost = planPrediction?.cost ?? 0;
   const consolePrediction = useMemo(
-    () => predictConsole(game, selectedConsoleSpec.performance, selectedConsoleSpec.cost),
-    [game, selectedConsoleSpec],
+    () => modal === "console" ? predictConsole(game, selectedConsoleSpec.performance, selectedConsoleSpec.cost) : null,
+    [modal, game, selectedConsoleSpec],
   );
   const earlyReleasePrediction = project?.kind === "game" && project.stage === "debug"
     ? predictEarlyRelease(game, project)
@@ -190,8 +205,6 @@ export default function Home() {
       : Math.min(100, Math.round((project.progress / project.target) * 100))
     : 0;
 
-  const persistentState = game;
-
   useEffect(() => {
     if (!availablePlatforms.some((item) => item.name === selectedPlatform)) {
       setSelectedPlatform(availablePlatforms[0]?.name ?? "个人电脑");
@@ -204,11 +217,15 @@ export default function Home() {
 
   useEffect(() => {
     if (project?.kind === "game" && project.stage !== "debug" && !project.leadName && !modal && !stageCreation) {
-      setPaused(true);
       replaceStageCreation({ phase: "select", stage: project.stage ?? "planning" });
       setModal("stage");
     }
   }, [project, modal, stageCreation, replaceStageCreation]);
+
+  useEffect(() => {
+    if (project?.kind !== "game" || !project.pendingChallenge || modal || stageCreation) return;
+    setModal("challenge");
+  }, [project, modal, stageCreation]);
 
   const announce = useCallback((message: string) => {
     setToast(message);
@@ -219,14 +236,15 @@ export default function Home() {
     for (const effect of effects) {
       if (effect.type === "toast") announce(effect.message);
       if (effect.type === "pause-for-stage") {
-        setPaused(true);
         replaceStageCreation({ phase: "select", stage: effect.stage });
         setModal("stage");
       }
       if (effect.type === "stage-creation") {
-        setPaused(true);
         setModal(null);
         replaceStageCreation({ ...effect.creation, phase: "focus" });
+      }
+      if (effect.type === "staff-challenge") {
+        setModal("challenge");
       }
       if (effect.type === "event") {
         setEventData(effect.event);
@@ -238,18 +256,13 @@ export default function Home() {
       }
       if (effect.type === "result") {
         setResultData(effect.result);
-        setPaused(true);
         setModal("result");
       }
     }
   }, [announce, replaceStageCreation]);
 
   const saveGame = () => {
-    window.localStorage.setItem(
-      SAVE_STORAGE_KEY,
-      JSON.stringify(serializeGameState(persistentState)),
-    );
-    announce("已保存到这台设备");
+    if (persistGame()) announce("已保存到这台设备");
   };
 
   const restartGame = () => {
@@ -289,30 +302,22 @@ export default function Home() {
       const result = dispatchGame({
         type: "tick",
         isNewWeek: tickRef.current % 4 === 0,
+        allowStaffChallenge: true,
       });
       applyEngineEffects(result.effects);
+      if (result.effects.some((effect) => effect.type === "staff-challenge")) {
+        persistGame();
+      }
     }, 1200 / speed);
     return () => window.clearInterval(interval);
-  }, [paused, modal, stageCreation, speed, dispatchGame, applyEngineEffects]);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      window.localStorage.setItem(
-        SAVE_STORAGE_KEY,
-        JSON.stringify(serializeGameState(persistentState)),
-      );
-    }, 8000);
-    return () => window.clearInterval(timer);
-  }, [persistentState]);
+  }, [paused, modal, stageCreation, speed, dispatchGame, applyEngineEffects, persistGame]);
 
   const openMenu = (nextModal: Modal) => {
     setModal(nextModal);
-    setPaused(true);
   };
 
   const closeModal = () => {
     setModal(null);
-    setPaused(false);
   };
 
   const startGame = () => {
@@ -329,7 +334,6 @@ export default function Home() {
     setSelectedDirectionPoints(DEFAULT_DIRECTION_POINTS);
     replaceStageCreation({ phase: "select", stage: "planning" });
     setModal("stage");
-    setPaused(true);
     announce("企划通过，请选择负责人");
   };
 
@@ -352,7 +356,7 @@ export default function Home() {
     });
     applyEngineEffects(result.effects);
     if (result.effects.some((effect) => effect.type === "stage-creation")) {
-      window.localStorage.setItem(SAVE_STORAGE_KEY, JSON.stringify(serializeGameState(result.state)));
+      persistGame();
       announce(`${member.name} 开始${stageInfo.label}`);
     }
   };
@@ -371,8 +375,24 @@ export default function Home() {
     });
     applyEngineEffects(result.effects);
     if (result.effects.some((effect) => effect.type === "stage-creation")) {
-      window.localStorage.setItem(SAVE_STORAGE_KEY, JSON.stringify(serializeGameState(result.state)));
+      persistGame();
       announce(`外部专家开始${stageInfo.label}`);
+    }
+  };
+
+  const resolveStaffChallenge = (investment: StaffChallengeInvestment | "skip") => {
+    const offer = project?.kind === "game" ? project.pendingChallenge : undefined;
+    if (!offer) return;
+    const result = dispatchGame({
+      type: "resolve-staff-challenge",
+      offerId: offer.id,
+      investment,
+    });
+    applyEngineEffects(result.effects);
+    if (result.state.project?.pendingChallenge) return;
+    persistGame();
+    if (!result.effects.some((effect) => effect.type === "stage-creation")) {
+      setModal(null);
     }
   };
 
@@ -593,7 +613,6 @@ export default function Home() {
       reward: `员工上限提升至 ${getOfficeCapacity(nextLevel)} 人`,
     });
     setModal("event");
-    setPaused(true);
   };
 
   const advanceStageSequence = useCallback((phase: Exclude<StageCreationPhase, "select">) => {
@@ -601,12 +620,12 @@ export default function Home() {
     const next = advanceStageCreation(current, phase);
     if (next === current) return;
     replaceStageCreation(next);
-    if (!next) setPaused(false);
   }, [replaceStageCreation]);
 
   return (
     <main className="game-page">
       <div className="game-shell">
+        {saveError && <div className="save-error" role="alert">{saveError}</div>}
         <GameDashboard
           game={game}
           modal={modal}
@@ -684,6 +703,7 @@ export default function Home() {
           hireWithMethod={hireWithMethod}
           advertise={advertise}
           attendExpo={attendExpo}
+          resolveStaffChallenge={resolveStaffChallenge}
         />
       </div>
     </main>
