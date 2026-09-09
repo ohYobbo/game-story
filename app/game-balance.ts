@@ -12,7 +12,7 @@ export type BalanceStaff = {
   salary?: number;
 };
 
-export const BALANCE_VERSION = 2;
+export const BALANCE_VERSION = 3;
 export const STARTING_CASH = 500;
 export const STARTING_FANS = 0;
 export const STARTING_RESEARCH = 10;
@@ -20,7 +20,8 @@ export const STARTING_REPUTATION = 0;
 export const HALL_OF_FAME_SCORE = 32;
 export const COMBO_STARTING_BONUS = 2;
 export const COMBO_REVIEW_BONUS = 0.75;
-export const SALES_INCOME_PER_COPY = 0.008;
+export const SALES_INCOME_PER_COPY = 0.0075;
+export const DEBUG_RESEARCH_PER_BUG = 1;
 
 export const STAGE_TARGETS: Record<ProductionStage, number> = {
   planning: 32,

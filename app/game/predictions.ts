@@ -101,7 +101,7 @@ export function createGameProject(input: GamePlanInput): Project {
     stageProgress: 0,
     stageTarget: getStageTarget("planning", input.direction),
     elapsedWeeks: 0,
-    sequelOf: sequel?.name,
+    sequelOfId: sequel?.id,
     itemUses: 0,
     eventCount: 0,
     challengeCount: 0,

@@ -20,6 +20,16 @@ test("serialized saves contain explicit versions and no transient UI state", () 
   assert.deepEqual(parseSave(JSON.stringify(serialized)), state);
 });
 
+test("balance v3 preserves earned resources in v2 saves instead of rerunning the original opening reset", () => {
+  const initial = createInitialGameState();
+  const saved = { ...serializeGameState(initial), schemaVersion: 6, balanceVersion: 2, cash: 5000, research: 41, fans: 123, staff: [...initial.staff, ...initial.staff.map(member => ({ ...member, id: member.id + 10 }))] };
+  const migrated = migrateSave(saved);
+  assert.equal(migrated.cash, 5000);
+  assert.equal(migrated.research, 41);
+  assert.equal(migrated.fans, 123);
+  assert.equal(migrated.staff.length, 4);
+});
+
 test("legacy staff and stage-less game projects migrate to a resumable state", () => {
   const migrated = migrateSave({
     balanceVersion: 1,

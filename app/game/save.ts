@@ -13,7 +13,7 @@ import {
 } from "./rules.ts";
 import type { GameState, LegacySaveState, SaveState } from "./types";
 
-export const SAVE_SCHEMA_VERSION = 5;
+export const SAVE_SCHEMA_VERSION = 7;
 export const SAVE_STORAGE_KEY = "pixel-studio-save";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -34,7 +34,7 @@ export function migrateSave(value: unknown): GameState | null {
   const initial = createInitialGameState();
   const legacyStaff = Array.isArray(saved.staff) ? saved.staff : INITIAL_STAFF;
   const migrateUntouchedOpening =
-    (saved.balanceVersion ?? 1) < BALANCE_VERSION &&
+    (saved.balanceVersion ?? 1) < 2 &&
     saved.year === 1 &&
     saved.month === 4 &&
     saved.week === 1 &&
@@ -63,15 +63,40 @@ export function migrateSave(value: unknown): GameState | null {
         ...migratedProject,
         challengeCount: migratedProject.challengeCount ?? 0,
       }
-    : migratedProject;
-  const releases = (saved.releases ?? []).map((item) => ({
-    ...item,
-    genre: item.genre ?? "角色扮演",
-    theme: item.theme ?? "幻想",
-    sequelEligible: item.sequelEligible ?? item.score >= HALL_OF_FAME_SCORE,
-    weeklyRank:
-      item.weeklyRank ?? getSalesRank(item.weeklySales ?? 0, saved.year ?? 1),
-  }));
+    : migratedProject ? { ...migratedProject } : null;
+  if (project && (project.waitingForLeadRecovery !== true || project.kind !== "game" ||
+    project.stage === "debug" || project.leadName || project.pendingChallenge || !staff.length)) {
+    delete project.waitingForLeadRecovery;
+  }
+  const usedIds = new Set((saved.releases ?? []).map(item => item.id).filter(Boolean));
+  let nextReleaseNumber = Math.max(1, Math.floor(saved.nextReleaseNumber ?? 1));
+  for (const id of usedIds) {
+    const match = /^release-(\d+)$/.exec(id);
+    if (match) nextReleaseNumber = Math.max(nextReleaseNumber, Number(match[1]) + 1);
+  }
+  const allocateId = () => {
+    while (usedIds.has(`release-${nextReleaseNumber}`)) nextReleaseNumber += 1;
+    const id = `release-${nextReleaseNumber++}`;
+    usedIds.add(id);
+    return id;
+  };
+  const seenIds = new Set<string>();
+  const releases = (saved.releases ?? []).map((item) => {
+    const id = item.id && !seenIds.has(item.id) ? item.id : allocateId();
+    seenIds.add(id);
+    return {
+      ...item,
+      id,
+      sequelEligible: item.sequelEligible ?? item.score >= HALL_OF_FAME_SCORE,
+      weeklyRank:
+        item.weeklyRank ?? getSalesRank(item.weeklySales ?? 0, saved.year ?? 1),
+    };
+  });
+  // Old in-flight sequels used a name. Ambiguous names must not consume either predecessor.
+  if (project?.sequelOf && !project.sequelOfId) {
+    const matches = releases.filter(item => item.name === project.sequelOf);
+    if (matches.length === 1) project.sequelOfId = matches[0].id;
+  }
   const companyLevel =
     staff.length > 6
       ? 3
@@ -92,6 +117,8 @@ export function migrateSave(value: unknown): GameState | null {
     staff,
     project,
     releases,
+    nextReleaseNumber,
+    releaseHistoryIncomplete: saved.releaseHistoryIncomplete ?? (releases.length > 0 && (saved.schemaVersion ?? 0) < 7),
     companyLevel,
     awards: saved.awards ?? 0,
     ownConsole: saved.ownConsole ?? false,

@@ -196,14 +196,18 @@ test("engine forecasts cover independent seeds across directions, combinations a
   }
 });
 
-test("unavailable teams produce no misleading finite forecast and all material risks remain visible", () => {
+test("tired teams include recovery while empty teams have no misleading finite forecast", () => {
   const initial = createInitialGameState();
-  const input = planInput({ ...initial, cash: 0, staff: initial.staff.map(member => ({ ...member, resting: true, energy: 5 })) });
+  const input = planInput({ ...initial, cash: 1000, staff: initial.staff.map(member => ({ ...member, resting: true, energy: 5 })) });
   input.platform = { ...input.platform, retire: initial.year };
   const prediction = predictGamePlan(input);
-  assert.equal(prediction.durationWeeks, null);
-  assert.equal(prediction.qualityRange, null);
-  for (const message of ["内部团队", "资金缺口", "退市", "体力偏低"]) assert.ok(prediction.risks.some(risk => risk.text.includes(message)));
+  assert.ok(prediction.durationWeeks);
+  assert.ok(forecastProject(input.state, prediction.project).recoveryRuns > 0);
+  const empty = predictGamePlan({ ...input, state: { ...input.state, staff: [] } });
+  assert.equal(empty.durationWeeks, null);
+  assert.equal(empty.qualityRange, null);
+  const poor = predictGamePlan({ ...input, state: { ...input.state, cash: 0 } });
+  for (const message of ["资金缺口", "退市", "体力偏低"]) assert.ok(poor.risks.some(risk => risk.text.includes(message)));
   const rested = { ...initial, staff: [{ ...initial.staff[0], scenario: 100, resting: true }, initial.staff[1]] };
   const project = createGameProject(planInput(rested));
   assert.equal(predictStageLead(rested, project, rested.staff[0]).contributionLevel, "休息");

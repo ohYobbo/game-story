@@ -26,14 +26,16 @@ const average = (values, key) => values.reduce((sum, value) => sum + value[key],
 const normal = runs("海盗", "off");
 const great = runs("历史", "off");
 
-test("current-engine opening baseline: 45.85 weeks, 20.80 review, 40.74 RP, 202.56K product profit", () => {
+test("current-engine ordinary opening meets the original research and product-return targets", (t) => {
   assert.ok(normal.every(run => !run.blocked && run.challenges === 0));
   assert.ok(average(normal, "weeks") >= 20 && average(normal, "weeks") <= 50);
   assert.ok(average(normal, "score") >= 14 && average(normal, "score") <= 24);
-  // Characterization of the actual engine, NOT acceptance of the old 8-30 RP / 50-200K targets.
-  // The unresolved balance decision and the reason for replacing the old simulator are in ROADMAP.md.
-  assert.equal(average(normal, "research"), 40.73828125);
-  assert.equal(average(normal, "profit"), 202.55859375);
+  for (const values of [normal, Array.from({ length: 256 }, (_, index) => opening(index + 10001, "海盗", "off"))]) {
+    assert.ok(values.every(run => !run.blocked));
+    assert.ok(average(values, "research") >= 8 && average(values, "research") <= 30);
+    assert.ok(average(values, "profit") >= 50 && average(values, "profit") <= 200);
+    t.diagnostic(JSON.stringify(Object.fromEntries(["weeks", "score", "research", "profit"].map(key => [key, average(values, key)]))));
+  }
 });
 
 test("the real great combination improves reviews without making the opening a guaranteed Hall of Fame", () => {
@@ -43,15 +45,15 @@ test("the real great combination improves reviews without making the opening a g
 });
 
 for (const policy of ["skip", "steady"]) {
-  test("challenge-enabled opening with " + policy + " records both completed and unavailable-lead runs", () => {
+  test("challenge-enabled opening with " + policy + " recovers previously stranded teams and completes every seed", (t) => {
     const values = runs("海盗", policy);
     const completed = values.filter(run => !run.blocked);
-    assert.equal(completed.length, 252);
+    assert.equal(completed.length, 256);
+    assert.equal(completed.filter(run => run.recoveryWeeks > 0).length, 4);
     assert.ok(completed.every(run => run.challenges <= 2 && run.challenges >= 1));
     assert.ok(average(completed, "weeks") >= 20 && average(completed, "weeks") <= 50);
-    for (const blocked of values.filter(run => run.blocked)) {
-      assert.ok(blocked.state.project);
-      assert.ok(blocked.state.staff.every(member => member.resting || member.energy <= 10));
-    }
+    assert.ok(average(completed, "research") >= 8 && average(completed, "research") <= 30);
+    assert.ok(average(completed, "profit") >= 50 && average(completed, "profit") <= 200);
+    t.diagnostic(JSON.stringify(Object.fromEntries(["weeks", "score", "research", "profit"].map(key => [key, average(completed, key)]))));
   });
 }

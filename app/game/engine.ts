@@ -1,4 +1,5 @@
 import {
+  DEBUG_RESEARCH_PER_BUG,
   HALL_OF_FAME_SCORE,
   getAnnualPayroll,
   getConsoleInitialUsers,
@@ -27,6 +28,7 @@ import {
 } from "./data.ts";
 import {
   advanceCalendar,
+  canWaitForStageLead,
   clamp,
   formatCash,
   formatUsers,
@@ -37,6 +39,7 @@ import {
   getOfficeCapacity,
   getSalesRank,
   getStageTarget,
+  isAvailableStageLead,
 } from "./rules.ts";
 import {
   CONTINUOUS_LEAD_MULTIPLIER,
@@ -80,6 +83,7 @@ export type EngineResult = {
 export type GameAction =
   | { type: "tick"; isNewWeek: boolean; allowStaffChallenge?: boolean }
   | { type: "scheduled-event" }
+  | { type: "wait-for-stage-lead" }
   | { type: "start-project"; project: Project; cost?: number }
   | {
       type: "choose-lead";
@@ -257,12 +261,13 @@ function completeProject(
     fanSegments[key] += directionAudienceGains[key];
   }
   const prior = state.releases.map((item) =>
-    item.name === finished.sequelOf
+    finished.sequelOfId && item.id === finished.sequelOfId
       ? { ...item, sequelEligible: false }
       : item,
   );
   const releases = [
     {
+      id: `release-${state.nextReleaseNumber}`,
       name: finished.name,
       score: totalScore,
       sales,
@@ -279,10 +284,13 @@ function completeProject(
       sequelEligible: totalScore >= HALL_OF_FAME_SCORE,
       weeklyRank: salesRank,
       fanLetterSent: false,
-      developmentCost: finished.developmentCost ?? 0,
+      developmentCost: finished.developmentCost,
+      sequelOfId: finished.sequelOfId,
+      finalQuality: { fun: finished.fun, creativity: finished.creativity, graphics: finished.graphics, sound: finished.sound, bugs: finished.bugs },
+      combo: GREAT_COMBOS.has(`${finished.genre}|${finished.theme}`) ? "great" as const : "normal" as const,
     },
     ...prior,
-  ].slice(0, 32);
+  ];
   const growth = `${finished.genre} Lv.${nextGenreLevel} · ${finished.theme} Lv.${nextThemeLevel}${
     nextGenreLevel > oldGenreLevel || nextThemeLevel > oldThemeLevel
       ? "  熟练度提升！"
@@ -299,6 +307,7 @@ function completeProject(
       research:
         state.research + getDirectionConfig(finished.direction).research,
       releases,
+      nextReleaseNumber: state.nextReleaseNumber + 1,
       consoleUsers:
         finished.platform === "像素盒子"
           ? state.consoleUsers + Math.round(sales * .18)
@@ -418,7 +427,7 @@ function advanceStaffEnergy(state: GameState): GameState {
   return {
     ...state,
     staff: state.staff.map((member) => {
-      if (!state.project || member.resting) {
+      if (!state.project || state.project.waitingForLeadRecovery || member.resting) {
         const energy = clamp(
           member.energy + (state.project ? 11 : 14),
           0,
@@ -606,7 +615,7 @@ function advanceProject(
       const debugGain = getDebugGain(stagePower, energyModifier, random());
       const bugs = Math.max(0, current.bugs - debugGain);
       const researchProgress =
-        (current.debugResearch ?? 0) + (current.bugs - bugs) * 1.5;
+        (current.debugResearch ?? 0) + (current.bugs - bugs) * DEBUG_RESEARCH_PER_BUG;
       const gainedResearch = Math.floor(researchProgress);
       const project = {
         ...current,
@@ -871,6 +880,19 @@ function tick(
   const staffBeforeTick = state.staff;
   const weeklyResult = isNewWeek ? advanceWeeklySales(state) : noEffects(state);
   const energyState = advanceStaffEnergy(weeklyResult.state);
+  if (energyState.project?.waitingForLeadRecovery) {
+    return {
+      state: {
+        ...energyState,
+        project: {
+          ...energyState.project,
+          elapsedWeeks: (energyState.project.elapsedWeeks ?? 0) + (isNewWeek ? 1 : 0),
+          waitingForLeadRecovery: energyState.staff.some(isAvailableStageLead) ? undefined : true,
+        },
+      },
+      effects: weeklyResult.effects,
+    };
+  }
   const projectResult = advanceProject(
     energyState,
     staffBeforeTick,
@@ -893,7 +915,7 @@ export function applyScheduledEvent(
 
   if (state.year >= 20 && !state.endingShown) {
     const bestSeller = [...state.releases].sort((a, b) => b.sales - a.sales)[0];
-    const bestProfit = [...state.releases].sort(
+    const bestProfit = state.releases.filter(item => item.developmentCost !== undefined).sort(
       (a, b) =>
         b.income -
         (b.developmentCost ?? 0) -
@@ -918,7 +940,7 @@ export function applyScheduledEvent(
               : score >= 5_000
                 ? "跻身一流开发商！"
                 : "故事仍会继续",
-          body: `二十年资产 ${formatCash(score)}。最高销量作品《${bestSeller?.name ?? "尚无作品"}》售出 ${(bestSeller?.sales ?? 0).toLocaleString()} 套；最高利润作品《${bestProfit?.name ?? "尚无作品"}》贡献 ${formatCash(Math.max(0, (bestProfit?.income ?? 0) - (bestProfit?.developmentCost ?? 0)))}。结算后仍可继续经营。`,
+          body: `二十年资产 ${formatCash(score)}。最高销量作品《${bestSeller?.name ?? "尚无作品"}》售出 ${(bestSeller?.sales ?? 0).toLocaleString()} 套；${bestProfit ? `作品收益最高《${bestProfit.name}》为 ${Math.round(bestProfit.income - bestProfit.developmentCost!).toLocaleString()} 千` : "作品收益未知（无开发费记录）"}。作品收益仅扣立项开发费，不含薪资、广告及挑战投入。${state.releaseHistoryIncomplete ? "旧记录不完整，仅统计已保留作品。" : ""}结算后仍可继续经营。`,
           reward: `20 年资产记录 ${formatCash(score)}`,
         },
       }],
@@ -1429,6 +1451,7 @@ function chooseStageLead(
   const soundGain = stage === "sound" ? opening.quality * 1.1 : 0;
   const project = {
     ...current,
+    waitingForLeadRecovery: undefined,
     leadStaffId: member?.id,
     leadName: member?.name ?? action.leadName,
     leadSkill: opening.effectiveSkill,
@@ -1529,6 +1552,10 @@ export function applyGameAction(
       return tick(state, action.isNewWeek, action.allowStaffChallenge ?? false, random);
     case "scheduled-event":
       return applyScheduledEvent(state, random);
+    case "wait-for-stage-lead":
+      return canWaitForStageLead(state)
+        ? noEffects({ ...state, project: { ...state.project!, waitingForLeadRecovery: true } })
+        : noEffects(state);
     case "start-project":
       return noEffects({
         ...state,
@@ -1580,8 +1607,8 @@ export function applyGameAction(
         }],
       };
     case "complete-project":
-      return action.project ?? state.project
-        ? completeProject(state, action.project ?? state.project!, random)
+      return state.project && (!action.project || action.project === state.project)
+        ? completeProject(state, state.project, random)
         : noEffects(state);
   }
 }

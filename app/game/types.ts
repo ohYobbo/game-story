@@ -130,11 +130,13 @@ export type Project = {
   stageTarget?: number;
   leadStaffId?: number;
   leadName?: string;
+  waitingForLeadRecovery?: boolean;
   leadSkill?: number;
   debugTarget?: number;
   elapsedWeeks?: number;
   consoleSpec?: ConsoleSpec;
   sequelOf?: string;
+  sequelOfId?: string;
   itemUses?: number;
   eventCount?: number;
   challengeCount?: number;
@@ -151,6 +153,7 @@ export type Project = {
 };
 
 export type Release = {
+  id: string;
   name: string;
   score: number;
   sales: number;
@@ -169,6 +172,9 @@ export type Release = {
   fanLetterSent?: boolean;
   advertisingUses?: Record<string, number>;
   developmentCost?: number;
+  sequelOfId?: string;
+  finalQuality?: Pick<Project, "fun" | "creativity" | "graphics" | "sound" | "bugs">;
+  combo?: "great" | "normal";
 };
 
 export type Inventory = {
@@ -191,6 +197,8 @@ export type GameState = {
   staff: Staff[];
   project: Project | null;
   releases: Release[];
+  nextReleaseNumber: number;
+  releaseHistoryIncomplete: boolean;
   companyLevel: number;
   awards: number;
   ownConsole: boolean;

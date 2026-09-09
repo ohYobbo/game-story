@@ -17,6 +17,15 @@ import type {
 export const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
 
+export const isAvailableStageLead = (member: Staff) => !member.resting && member.energy > 10;
+
+export function canWaitForStageLead(state: GameState) {
+  const project = state.project;
+  return Boolean(project?.kind === "game" && project.stage !== "debug" && !project.leadName &&
+    !project.pendingChallenge && !project.waitingForLeadRecovery && state.staff.length &&
+    !state.staff.some(isAvailableStageLead));
+}
+
 export const formatCash = (value: number) =>
   `¥${Math.max(0, Math.round(value)).toLocaleString()}千`;
 
@@ -178,6 +187,8 @@ export function createInitialGameState(): GameState {
     staff: INITIAL_STAFF.map((member) => normalizeStaff({ ...member })),
     project: null,
     releases: [],
+    nextReleaseNumber: 1,
+    releaseHistoryIncomplete: false,
     companyLevel: 1,
     awards: 0,
     ownConsole: false,

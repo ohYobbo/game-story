@@ -9,7 +9,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "npm run build && node --experimental-strip-types --test tests/rendered-html.test.mjs tests/game-balance.test.mjs tests/opening-curve.test.mjs tests/game-engine.test.mjs tests/game-predictions.test.mjs tests/save-migration.test.mjs tests/stage-creation.test.mjs tests/staff-challenge.test.mjs tests/game-persistence.test.mjs",
+    "test": "npm run build && node --experimental-strip-types --test tests/rendered-html.test.mjs tests/game-balance.test.mjs tests/opening-curve.test.mjs tests/game-engine.test.mjs tests/game-predictions.test.mjs tests/save-migration.test.mjs tests/stage-creation.test.mjs tests/staff-challenge.test.mjs tests/game-persistence.test.mjs tests/stage-recovery.test.mjs tests/release-history.test.mjs",
     "lint": "eslint . --ignore-pattern .next"
   },
   "dependencies": {

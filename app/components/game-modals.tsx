@@ -20,6 +20,7 @@ import {
   TRAINING_METHODS,
 } from "../game/data";
 import {
+  canWaitForStageLead,
   clamp,
   formatCash,
   formatUsers,
@@ -95,8 +96,8 @@ type GameModalsProps = {
   selectedDirection: string;
   setSelectedDirection: Dispatch<SetStateAction<string>>;
   selectedDirectionPoints: DirectionPoints;
-  selectedSequelName: string;
-  setSelectedSequelName: Dispatch<SetStateAction<string>>;
+  selectedSequelId: string;
+  setSelectedSequelId: Dispatch<SetStateAction<string>>;
   consoleCpu: string;
   setConsoleCpu: Dispatch<SetStateAction<string>>;
   consoleMedia: string;
@@ -108,6 +109,7 @@ type GameModalsProps = {
   startConsoleProject: () => void;
   assignStageLead: (member: Staff) => void;
   hireExternalLead: () => void;
+  waitForStageLead: () => void;
   startContract: (contract: (typeof CONTRACTS)[number]) => void;
   levelUp: (id: number) => void;
   openTraining: (id: number) => void;
@@ -167,8 +169,8 @@ export function GameModals({
   selectedDirection,
   setSelectedDirection,
   selectedDirectionPoints,
-  selectedSequelName,
-  setSelectedSequelName,
+  selectedSequelId,
+  setSelectedSequelId,
   consoleCpu,
   setConsoleCpu,
   consoleMedia,
@@ -180,6 +182,7 @@ export function GameModals({
   startConsoleProject,
   assignStageLead,
   hireExternalLead,
+  waitForStageLead,
   startContract,
   levelUp,
   openTraining,
@@ -256,11 +259,11 @@ export function GameModals({
                 </div>
                 {companyLevel >= 3 && sequelCandidates.length > 0 && (
                   <label className="sequel-picker">
-                    <span><b>名人堂续作</b><small>继承前作四项品质；续作跌出名人堂会终止系列</small></span>
-                    <select value={selectedSequelName} onChange={(event) => {
-                      const name = event.target.value;
-                      const sequel = sequelCandidates.find((item) => item.name === name);
-                      setSelectedSequelName(name);
+                    <span><b>名人堂续作</b><small>前作评分提供四项品质加成；续作跌出名人堂会终止系列</small></span>
+                    <select value={selectedSequelId} onChange={(event) => {
+                      const id = event.target.value;
+                      const sequel = sequelCandidates.find((item) => item.id === id);
+                      setSelectedSequelId(id);
                       if (sequel) {
                         setGameName(`${sequel.name} 2`);
                         setSelectedGenre(sequel.genre ?? selectedGenre);
@@ -268,7 +271,7 @@ export function GameModals({
                       }
                     }}>
                       <option value="">制作全新作品</option>
-                      {sequelCandidates.map((item) => <option key={item.name} value={item.name}>{item.name} · {item.score}/40</option>)}
+                      {sequelCandidates.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.score}/40 · 第 {releases.length - releases.indexOf(item)} 部</option>)}
                     </select>
                   </label>
                 )}
@@ -283,8 +286,8 @@ export function GameModals({
                   ))}
                 </div>
                 <div className="two-columns">
-                  <label className="field-label">游戏类型<select value={selectedGenre} disabled={Boolean(selectedSequelName)} onChange={(e) => setSelectedGenre(e.target.value)}>{unlockedGenres.map((item) => <option key={item} value={item}>{item} Lv.{getKnowledgeLevel(genreExperience[item] ?? 0)}</option>)}</select></label>
-                  <label className="field-label">游戏题材<select value={selectedTheme} disabled={Boolean(selectedSequelName)} onChange={(e) => setSelectedTheme(e.target.value)}>{unlockedThemes.map((item) => <option key={item} value={item}>{item} Lv.{getKnowledgeLevel(themeExperience[item] ?? 0)}</option>)}</select></label>
+                  <label className="field-label">游戏类型<select value={selectedGenre} disabled={Boolean(selectedSequelId)} onChange={(e) => setSelectedGenre(e.target.value)}>{unlockedGenres.map((item) => <option key={item} value={item}>{item} Lv.{getKnowledgeLevel(genreExperience[item] ?? 0)}</option>)}</select></label>
+                  <label className="field-label">游戏题材<select value={selectedTheme} disabled={Boolean(selectedSequelId)} onChange={(e) => setSelectedTheme(e.target.value)}>{unlockedThemes.map((item) => <option key={item} value={item}>{item} Lv.{getKnowledgeLevel(themeExperience[item] ?? 0)}</option>)}</select></label>
                 </div>
                 <div className={`combo-note ${planPrediction?.combinationLevel === "杰作相性" ? "great" : ""}`}>
                   组合评价：{planPrediction?.combinationLevel ?? "计算中"}
@@ -311,7 +314,7 @@ export function GameModals({
                 </div>
                 {planPrediction && (
                   <section className="prediction-panel" aria-label="企划预测摘要">
-                    <div className="prediction-title"><b>企划确认摘要</b><small>64 次固定样本的观测范围，并非保证；每阶段选择开工品质最高的可用内部负责人，跳过员工挑战，不追加培训、宣传或道具</small></div>
+                    <div className="prediction-title"><b>企划确认摘要</b><small>64 次固定样本的观测范围，并非保证；每阶段选择开工品质最高的可用内部负责人，无人可用时计入等待恢复时间；跳过员工挑战，不追加培训、宣传或道具</small></div>
                     <div className="prediction-metrics">
                       <span><small>开发总成本</small><b>{formatCash(planPrediction.cost)}</b><em>现金 {Math.round(planPrediction.cashRatio * 100)}%</em></span>
                       <span><small>常规周期</small><b>{planPrediction.durationWeeks ? `${planPrediction.durationWeeks.min}–${planPrediction.durationWeeks.max} 周` : "无法估计"}</b><em>含预计除错</em></span>
@@ -366,6 +369,12 @@ export function GameModals({
                 <small>{STAGE_INFO[project.stage ?? "planning"].note}。负责人能力会直接影响最终品质。</small>
               </div>
             </div>
+            {canWaitForStageLead(game) && (
+              <div className="recovery-notice">
+                <p>全体员工暂时无法负责。可等待体力恢复后重新选人；等待期间日历、销量与年度事件照常推进，制作进度和品质不变。</p>
+                <button className="primary-button" onClick={waitForStageLead}>等待员工恢复体力</button>
+              </div>
+            )}
             <div className="lead-grid">
               {staff.map((member) => {
                 const prediction = predictStageLead(game, project, member);
@@ -593,8 +602,9 @@ export function GameModals({
             <div className="record-hero"><b>像素工坊</b><span>经营第 {year} 年 · {getOfficeCapacity(companyLevel)} 人办公室 · 粉丝 {fans.toLocaleString()}</span></div>
             <div className="record-stats">
               <div><small>已发售</small><b>{releases.length}</b></div>
-              <div><small>最高评分</small><b>{releases.length ? Math.max(...releases.map((item) => item.score)) : "—"}</b></div>
-              <div><small>最高销量</small><b>{releases.length ? Math.max(...releases.map((item) => item.sales)).toLocaleString() : "—"}</b></div>
+              <div><small>最高评分</small><b>{releases.length ? releases.reduce((best, item) => Math.max(best, item.score), 0) : "—"}</b></div>
+              <div><small>最高销量</small><b>{releases.length ? releases.reduce((best, item) => Math.max(best, item.sales), 0).toLocaleString() : "—"}</b></div>
+              <div><small>累计销量</small><b>{releases.reduce((total, item) => total + item.sales, 0).toLocaleString()}</b></div>
               <div><small>获奖次数</small><b>{awards}</b></div>
               <div><small>业界口碑</small><b>{reputation}</b></div>
             </div>
@@ -602,7 +612,7 @@ export function GameModals({
               <UiIcon index={21} className={`console-record-icon ${ownConsole ? "online" : ""}`} />
               <span><b>{ownConsole ? "像素盒子" : "尚未推出自研主机"}</b><small>{ownConsole ? `平台用户 ${formatUsers(consoleUsers)}` : "扩建并积累作品后可启动硬件研发"}</small></span>
             </div>
-            {endingShown && <div className="ending-record"><b>20 年资产记录</b><strong>{formatCash(endingScore)}</strong><small>同时记录最高销量与最高利润作品</small></div>}
+            {endingShown && <div className="ending-record"><b>20 年资产记录</b><strong>{formatCash(endingScore)}</strong><small>作品纪录见下方完整历史统计</small></div>}
             <div className="fan-segments">
               <div className="fan-title"><b>玩家人群</b><small>作品题材与宣传方式会改变各群体支持度</small></div>
               {([
@@ -625,9 +635,11 @@ export function GameModals({
               <div><b>题材熟练度</b>{unlockedThemes.map((item) => <span key={item}>{item}<em>Lv.{getKnowledgeLevel(themeExperience[item] ?? 0)}</em></span>)}</div>
             </div>
             <div className="release-table">
-              {releases.length ? releases.map((item, index) => (
-                <div key={`${item.name}-${index}`}>
-                  <span><b>{item.name}{item.sequelEligible ? " · 名人堂" : ""}</b><small>{item.audience ?? "全年龄"} · 发售 {item.weeks} 周</small></span>
+              <p>展示最近 32 部；统计与销售保留全部作品。作品收益 = 累计销售收入 − 立项开发费，不含薪资、广告、外援、道具和挑战投入。</p>
+              {game.releaseHistoryIncomplete && <p>旧记录不完整：已丢失作品无法恢复；统计仅含保留作品，缺失品质、组合及开发费显示未知。</p>}
+              {releases.length ? releases.slice(0, 32).map((item) => (
+                <div key={item.id}>
+                  <span><b>{item.name}{item.sequelEligible ? " · 名人堂" : ""}</b><small>{item.audience ?? "受众未知"} · 发售 {item.weeks} 周</small><small>{item.genre ?? "类型未知"} × {item.theme ?? "题材未知"} · {item.combo === undefined ? "组合未知" : item.combo === "great" ? "杰作组合" : "普通组合"}</small><small>{item.finalQuality ? `趣味 ${item.finalQuality.fun.toFixed(1)} / 创意 ${item.finalQuality.creativity.toFixed(1)} / 画面 ${item.finalQuality.graphics.toFixed(1)} / 音乐 ${item.finalQuality.sound.toFixed(1)} / 漏洞 ${item.finalQuality.bugs.toFixed(1)}` : "发售品质未知"}</small><small>开发费 {item.developmentCost === undefined ? "未知" : formatCash(item.developmentCost)} · 作品收益 {item.developmentCost === undefined ? "未知" : `${Math.round(item.income - item.developmentCost).toLocaleString()} 千`}</small></span>
                   <em>{item.score}/40</em>
                   <strong>{item.sales.toLocaleString()} 套<small>本周 {(item.weeklySales ?? 0).toLocaleString()} · 第 {item.weeklyRank ?? "—"} 名</small></strong>
                 </div>
@@ -650,7 +662,7 @@ export function GameModals({
               <div className="challenge-forecast" aria-label="挑战结果预测">
                 <span><small>基础成功率</small><b>{Math.round(pendingChallenge.baseSuccessRate * 100)}%</b><em>投入后最高 {Math.round(STAFF_CHALLENGE_SUCCESS_CAP * 100)}%</em></span>
                 <span><small>成功收益</small><b>{challengeMetric.label} +{pendingChallenge.gainRange.min}–{pendingChallenge.gainRange.max}</b><em>热度 +{pendingChallenge.successHype}</em></span>
-                <span className="is-risk"><small>失败后果</small><b>热度 -{pendingChallenge.failureHypeLoss}</b><em>漏洞 +{pendingChallenge.failureBugs}</em></span>
+                <span className="is-risk"><small>失败后果</small><b>热度 -{Math.min(project?.hype ?? 0, pendingChallenge.failureHypeLoss)}</b><em>漏洞 +{pendingChallenge.failureBugs}</em></span>
               </div>
               <div className="challenge-options">
                 <button className="challenge-skip" onClick={() => resolveStaffChallenge("skip")}>
@@ -665,7 +677,7 @@ export function GameModals({
                     ? "资金不足"
                     : research < option.researchCost
                       ? "研究点不足"
-                      : `成功率 +${Math.round(option.chanceBonus * 100)}%`;
+                      : `成功率 +${Math.round(successRate * 100) - Math.round(pendingChallenge.baseSuccessRate * 100)} 个百分点`;
                   return (
                     <button
                       key={option.id}

@@ -8,6 +8,7 @@ import {
   STAFF_CHALLENGE_SUCCESS_CAP,
 } from "../app/game/predictions.ts";
 import { createInitialGameState } from "../app/game/rules.ts";
+import { parseSave, serializeGameState } from "../app/game/save.ts";
 
 function randomFrom(seed) {
   let value = seed >>> 0;
@@ -229,4 +230,33 @@ test("a restored challenge remains skippable when its employee is missing or exh
     assert.equal(skipped.state.cash, state.cash);
     assert.equal(skipped.state.research, state.research);
   }
+});
+
+test("offer frequency, debugging and near-stage-completion boundaries prevent extra challenges", () => {
+  for (const overrides of [{ challengeCount: 2, elapsedWeeks: 20 }, { stage: "debug", bugs: 30 }, { stageProgress: 85, stageTarget: 100 }, { challengeCount: 1, elapsedWeeks: 2 }]) {
+    const result = triggerChallenge(overrides);
+    assert.ok(!result.effects.some(effect => effect.type === "staff-challenge"));
+  }
+  const triggered = triggerChallenge();
+  assert.ok(!triggered.effects.some(effect => effect.type === "event"));
+  assert.equal(triggered.state.project.eventCount, 0);
+});
+
+test("capped chances and low hype resolve exact deltas and stale offers cannot charge", () => {
+  const offered = triggerChallenge().state;
+  const offer = { ...offered.project.pendingChallenge, baseSuccessRate: .88 };
+  const state = { ...offered, project: { ...offered.project, hype: 2, pendingChallenge: offer } };
+  assert.equal(getStaffChallengeSuccessRate(offer, "steady"), .9);
+  assert.equal(getStaffChallengeSuccessRate(offer, "full"), .9);
+  const stale = applyGameAction(state, { type: "resolve-staff-challenge", offerId: "obsolete", investment: "full" }, () => { throw Error("stale RNG"); });
+  assert.strictEqual(stale.state, state);
+  const failure = applyGameAction(state, { type: "resolve-staff-challenge", offerId: offer.id, investment: "steady" }, () => .99);
+  assert.equal(failure.state.project.hype, 0);
+  assert.equal(failure.state.project.bugs, state.project.bugs + 5);
+  const entries = failure.effects.find(effect => effect.type === "stage-creation").creation.result.entries;
+  assert.ok(entries.some(entry => entry.label === "热度" && entry.value === "-2"));
+  const restored = parseSave(JSON.stringify(serializeGameState(failure.state)));
+  const replay = applyGameAction(restored, { type: "resolve-staff-challenge", offerId: offer.id, investment: "full" }, () => { throw Error("replay RNG"); });
+  assert.strictEqual(replay.state, restored);
+  assert.equal(replay.state.cash, state.cash - 30);
 });

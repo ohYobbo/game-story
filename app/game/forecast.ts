@@ -1,4 +1,5 @@
 import { applyGameAction } from "./engine.ts";
+import { canWaitForStageLead, isAvailableStageLead } from "./rules.ts";
 import { STAGE_INFO } from "./data.ts";
 import { predictStageLead, type NumberRange } from "./operations.ts";
 import type { GameState, Project, RandomSource, StaffChallengeInvestment } from "./types";
@@ -9,7 +10,7 @@ export function seededRandom(seed: number): RandomSource {
 }
 
 // Use the production engine, including recovery, opening creation, events and debugging.
-// Decisions take no game time. An unavailable internal lead blocks this policy, just as in the UI.
+// Selection takes no game time; recovery uses the same wait action and ticks as the UI.
 export function simulateProject(
   initial: GameState,
   project: Project,
@@ -21,6 +22,7 @@ export function simulateProject(
   let finalProject = project;
   let review = null;
   let challenges = 0;
+  let recoveryTicks = 0;
   for (let ticks = 0; ticks < 2000; ticks += 1) {
     if (state.project?.pendingChallenge) {
       const offer = state.project.pendingChallenge;
@@ -32,24 +34,29 @@ export function simulateProject(
       challenges += 1;
     }
     const current = state.project;
-    if (!current) return { state, finalProject, review, weeks: ticks / 4, blocked: false, challenges };
-    if (current.kind === "game" && current.stage !== "debug" && !current.leadName) {
-      const lead = state.staff.filter((member) => !member.resting && member.energy > 10)
+    if (!current) return { state, finalProject, review, weeks: ticks / 4, blocked: false, challenges, recoveryWeeks: recoveryTicks / 4 };
+    if (current.kind === "game" && current.stage !== "debug" && !current.leadName && !current.waitingForLeadRecovery) {
+      const lead = state.staff.filter(isAvailableStageLead)
         .map((member) => ({ member, quality: predictStageLead(state, current, member).openingQualityRange }))
         .sort((a, b) => (b.quality.min + b.quality.max) - (a.quality.min + a.quality.max))[0]?.member;
-      if (!lead) return { state, finalProject: current, review, weeks: ticks / 4, blocked: true, challenges };
-      state = applyGameAction(state, {
-        type: "choose-lead", leadStaffId: lead.id, leadName: lead.name,
-        leadSkill: lead[STAGE_INFO[current.stage ?? "planning"].skill],
-      }, random).state;
+      if (!lead && !canWaitForStageLead(state)) return { state, finalProject: current, review, weeks: ticks / 4, blocked: true, challenges, recoveryWeeks: recoveryTicks / 4 };
+      if (!lead) {
+        state = applyGameAction(state, { type: "wait-for-stage-lead" }, random).state;
+      } else {
+        state = applyGameAction(state, {
+          type: "choose-lead", leadStaffId: lead.id, leadName: lead.name,
+          leadSkill: lead[STAGE_INFO[current.stage ?? "planning"].skill],
+        }, random).state;
+      }
     }
+    if (state.project?.waitingForLeadRecovery) recoveryTicks += 1;
     finalProject = state.project!;
     const result = applyGameAction(state, { type: "tick", isNewWeek: (ticks + 1) % 4 === 0, allowStaffChallenge }, random);
     state = result.state;
     review = result.effects.find((effect) => effect.type === "review")?.review ?? review;
-    if (!state.project) return { state, finalProject, review, weeks: (ticks + 1) / 4, blocked: false, challenges };
+    if (!state.project) return { state, finalProject, review, weeks: (ticks + 1) / 4, blocked: false, challenges, recoveryWeeks: recoveryTicks / 4 };
   }
-  return { state, finalProject, review, weeks: 500, blocked: true, challenges };
+  return { state, finalProject, review, weeks: 500, blocked: true, challenges, recoveryWeeks: recoveryTicks / 4 };
 }
 
 function observedRange(values: number[]): NumberRange | null {
@@ -63,6 +70,7 @@ export function forecastProject(state: GameState, project: Project) {
   return {
     sampleCount: samples.length,
     blockedRuns: samples.length - completed.length,
+    recoveryRuns: samples.filter(sample => sample.recoveryWeeks > 0).length,
     durationWeeks: observedRange(completed.map((sample) => sample.weeks)),
     qualityRange: observedRange(completed.map(({ finalProject: p }) => (p.fun + p.creativity + p.graphics + p.sound) / 4)),
     userRange: observedRange(completed.map((sample) => sample.state.consoleUsers)),

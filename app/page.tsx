@@ -112,7 +112,7 @@ export default function Home() {
   const [consoleCpu, setConsoleCpu] = useState(CONSOLE_CPUS[0].name);
   const [consoleMedia, setConsoleMedia] = useState(CONSOLE_MEDIA[0].name);
   const [consoleBody, setConsoleBody] = useState(CONSOLE_BODIES[0].name);
-  const [selectedSequelName, setSelectedSequelName] = useState("");
+  const [selectedSequelId, setSelectedSequelId] = useState("");
   const [review, setReview] = useState<ReviewData | null>(null);
   const [eventData, setEventData] = useState<EventData | null>(null);
   const [resultData, setResultData] = useState<ResultData | null>(null);
@@ -171,7 +171,7 @@ export default function Home() {
   const directionPointBudget = 8 + (selectedGenreLevel >= 2 ? 2 : 0) + (selectedGenreLevel >= 5 ? 2 : 0);
   const spentDirectionPoints = Object.values(selectedDirectionPoints).reduce((sum, value) => sum + value, 0);
   const remainingDirectionPoints = directionPointBudget - spentDirectionPoints;
-  const selectedSequel = releases.find((item) => item.name === selectedSequelName && item.sequelEligible);
+  const selectedSequel = releases.find((item) => item.id === selectedSequelId && item.sequelEligible);
   const selectedGameGenre = selectedSequel?.genre ?? selectedGenre;
   const selectedGameTheme = selectedSequel?.theme ?? selectedTheme;
   const selectedPlatformData = availablePlatforms.find((item) => item.name === selectedPlatform) ?? availablePlatforms[0];
@@ -214,18 +214,6 @@ export default function Home() {
   useEffect(() => {
     setSelectedDirectionPoints(DEFAULT_DIRECTION_POINTS);
   }, [selectedGenre]);
-
-  useEffect(() => {
-    if (project?.kind === "game" && project.stage !== "debug" && !project.leadName && !modal && !stageCreation) {
-      replaceStageCreation({ phase: "select", stage: project.stage ?? "planning" });
-      setModal("stage");
-    }
-  }, [project, modal, stageCreation, replaceStageCreation]);
-
-  useEffect(() => {
-    if (project?.kind !== "game" || !project.pendingChallenge || modal || stageCreation) return;
-    setModal("challenge");
-  }, [project, modal, stageCreation]);
 
   const announce = useCallback((message: string) => {
     setToast(message);
@@ -280,7 +268,17 @@ export default function Home() {
     if (modal || stageCreation) return;
     const result = dispatchGame({ type: "scheduled-event" });
     applyEngineEffects(result.effects);
-  }, [year, month, week, modal, stageCreation, dispatchGame, applyEngineEffects]);
+    // Resolve calendar events before reopening a recovered team's lead selection.
+    if (result.effects.length) return;
+    const current = result.state.project;
+    if (current?.kind !== "game") return;
+    if (current.pendingChallenge) {
+      setModal("challenge");
+    } else if (current.stage !== "debug" && !current.leadName && !current.waitingForLeadRecovery) {
+      replaceStageCreation({ phase: "select", stage: current.stage ?? "planning" });
+      setModal("stage");
+    }
+  }, [year, month, week, project, modal, stageCreation, dispatchGame, applyEngineEffects, replaceStageCreation]);
 
   useEffect(() => {
     if (week !== 1 || modal || stageCreation) return;
@@ -330,7 +328,7 @@ export default function Home() {
       cost: selectedDevelopmentCost,
       project: planPrediction.project,
     });
-    setSelectedSequelName("");
+    setSelectedSequelId("");
     setSelectedDirectionPoints(DEFAULT_DIRECTION_POINTS);
     replaceStageCreation({ phase: "select", stage: "planning" });
     setModal("stage");
@@ -342,6 +340,15 @@ export default function Home() {
       if (delta > 0 && Object.values(points).reduce((sum, value) => sum + value, 0) >= directionPointBudget) return points;
       return { ...points, [key]: clamp(points[key] + delta, 0, 10) };
     });
+  };
+
+  const waitForStageLead = () => {
+    const result = dispatchGame({ type: "wait-for-stage-lead" });
+    if (!result.state.project?.waitingForLeadRecovery) return;
+    replaceStageCreation(null);
+    setModal(null);
+    persistGame();
+    announce(paused ? "已安排休息，点击继续后等待体力恢复" : "员工正在休息，恢复后重新选择负责人");
   };
 
   const assignStageLead = (member: Staff) => {
@@ -676,8 +683,8 @@ export default function Home() {
           selectedDirection={selectedDirection}
           setSelectedDirection={setSelectedDirection}
           selectedDirectionPoints={selectedDirectionPoints}
-          selectedSequelName={selectedSequelName}
-          setSelectedSequelName={setSelectedSequelName}
+          selectedSequelId={selectedSequelId}
+          setSelectedSequelId={setSelectedSequelId}
           consoleCpu={consoleCpu}
           setConsoleCpu={setConsoleCpu}
           consoleMedia={consoleMedia}
@@ -688,6 +695,7 @@ export default function Home() {
           startGame={startGame}
           startConsoleProject={startConsoleProject}
           assignStageLead={assignStageLead}
+          waitForStageLead={waitForStageLead}
           hireExternalLead={hireExternalLead}
           startContract={startContract}
           levelUp={levelUp}

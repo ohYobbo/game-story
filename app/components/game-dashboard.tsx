@@ -133,6 +133,12 @@ export function ProjectConsole({
             </div>
             <span className="percent">{projectPercent}%</span>
           </div>
+          {project.waitingForLeadRecovery && (
+            <div className="recovery-notice" role="status">
+              <b>等待员工恢复体力</b>
+              <p>制作暂缓，日历与经营事件照常推进。有人恢复后会重新打开负责人窗口；若已手动暂停，请点击“继续”。</p>
+            </div>
+          )}
           <div className="progress-track"><i style={{ width: `${projectPercent}%` }} /></div>
           {project.kind === "game" ? (
             <>

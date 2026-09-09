@@ -279,6 +279,7 @@ test("unified result entries report committed state deltas", () => {
 
 test("a sequel completion consumes the predecessor slot and can enter the Hall of Fame", () => {
   const predecessor = {
+    id: "legacy-1",
     name: "前作",
     score: 36,
     sales: 100_000,
@@ -290,7 +291,7 @@ test("a sequel completion consumes the predecessor slot and can enter the Hall o
   };
   const project = gameProject({
     name: "前作 2",
-    sequelOf: "前作",
+    sequelOfId: "legacy-1",
     fun: 90,
     creativity: 90,
     graphics: 90,
