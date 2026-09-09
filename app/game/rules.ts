@@ -189,6 +189,7 @@ export function createInitialGameState(): GameState {
     releases: [],
     nextReleaseNumber: 1,
     releaseHistoryIncomplete: false,
+    combinationDiscoveries: {},
     companyLevel: 1,
     awards: 0,
     ownConsole: false,

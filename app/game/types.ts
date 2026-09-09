@@ -1,4 +1,5 @@
 import type { ProductionStage } from "../game-balance";
+import type { CombinationDiscovery, CombinationRating } from "./combinations";
 
 export type Staff = {
   id: number;
@@ -137,6 +138,7 @@ export type Project = {
   consoleSpec?: ConsoleSpec;
   sequelOf?: string;
   sequelOfId?: string;
+  combination?: CombinationRating;
   itemUses?: number;
   eventCount?: number;
   challengeCount?: number;
@@ -174,7 +176,7 @@ export type Release = {
   developmentCost?: number;
   sequelOfId?: string;
   finalQuality?: Pick<Project, "fun" | "creativity" | "graphics" | "sound" | "bugs">;
-  combo?: "great" | "normal";
+  combo?: CombinationRating;
 };
 
 export type Inventory = {
@@ -199,6 +201,7 @@ export type GameState = {
   releases: Release[];
   nextReleaseNumber: number;
   releaseHistoryIncomplete: boolean;
+  combinationDiscoveries: Record<string, CombinationDiscovery>;
   companyLevel: number;
   awards: number;
   ownConsole: boolean;

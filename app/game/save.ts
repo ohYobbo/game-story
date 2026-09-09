@@ -12,8 +12,9 @@ import {
   normalizeStaff,
 } from "./rules.ts";
 import type { GameState, LegacySaveState, SaveState } from "./types";
+import { combinationKey } from "./combinations.ts";
 
-export const SAVE_SCHEMA_VERSION = 7;
+export const SAVE_SCHEMA_VERSION = 8;
 export const SAVE_STORAGE_KEY = "pixel-studio-save";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -104,6 +105,13 @@ export function migrateSave(value: unknown): GameState | null {
         ? Math.max(2, saved.companyLevel ?? 1)
         : saved.companyLevel ?? 1;
 
+  const combinationDiscoveries = { ...(saved.combinationDiscoveries ?? {}) };
+  for (const release of releases) {
+    if (release.genre && release.theme) {
+      const key = combinationKey(release.genre, release.theme);
+      combinationDiscoveries[key] ??= "tried";
+    }
+  }
   return {
     ...initial,
     cash: migrateUntouchedOpening ? initial.cash : saved.cash ?? initial.cash,
@@ -118,6 +126,7 @@ export function migrateSave(value: unknown): GameState | null {
     project,
     releases,
     nextReleaseNumber,
+    combinationDiscoveries,
     releaseHistoryIncomplete: saved.releaseHistoryIncomplete ?? (releases.length > 0 && (saved.schemaVersion ?? 0) < 7),
     companyLevel,
     awards: saved.awards ?? 0,
@@ -161,6 +170,7 @@ export function serializeGameState(state: GameState): SaveState {
     unlockedThemes: [...state.unlockedThemes],
     inventory: { ...state.inventory },
     lastStageLeads: { ...state.lastStageLeads },
+    combinationDiscoveries: { ...state.combinationDiscoveries },
     schemaVersion: SAVE_SCHEMA_VERSION,
     balanceVersion: BALANCE_VERSION,
   };

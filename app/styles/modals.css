@@ -570,3 +570,4 @@ select:focus-visible {
 .recovery-notice { margin: 10px 0; padding: 10px; border: 2px solid #bd984f; background: #fff1cc; color: #4a351b; }
 .recovery-notice p { margin: 0 0 8px; font-size: 13px; line-height: 1.5; }
 .recovery-notice p:last-child { margin-bottom: 0; }
+.combo-note small { display: block; margin-top: 4px; color: inherit; font-size: 12px; font-weight: normal; }

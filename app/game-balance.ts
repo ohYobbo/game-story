@@ -12,7 +12,7 @@ export type BalanceStaff = {
   salary?: number;
 };
 
-export const BALANCE_VERSION = 3;
+export const BALANCE_VERSION = 4;
 export const STARTING_CASH = 500;
 export const STARTING_FANS = 0;
 export const STARTING_RESEARCH = 10;

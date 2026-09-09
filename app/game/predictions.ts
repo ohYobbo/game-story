@@ -1,4 +1,5 @@
-import { COMBO_STARTING_BONUS, getContentPopularity, getDevelopmentCost, getFirstWeekSales, getReleaseFatigueMultiplier, getReviewScores, getGeneralQualityGain } from "../game-balance.ts";
+import { getContentPopularity, getDevelopmentCost, getFirstWeekSales, getReleaseFatigueMultiplier, getReviewScores, getGeneralQualityGain } from "../game-balance.ts";
+import { combinationKey, getCombination, getCombinationPopularity } from "./combinations.ts";
 import { CONTRACTS, GREAT_COMBOS } from "./data.ts";
 import { getAudience, getDirectionAudienceGains, getDirectionBoosts, getDirectionConfig, getKnowledgeLevel, getStageTarget } from "./rules.ts";
 import type { DirectionPoints, FanSegments, GameState, Project, Release } from "./types";
@@ -40,6 +41,8 @@ export type GamePlanPrediction = {
   cashPressure: string;
   riskLevel: string;
   combinationLevel: string;
+  popularityPercent: number;
+  fatiguePercent: number;
   audience: string;
   audienceChanges: string[];
   marketLevel: string;
@@ -66,8 +69,8 @@ const segmentLabels: Record<keyof FanSegments, string> = {
 
 export function createGameProject(input: GamePlanInput): Project {
   const { state, sequel } = input;
-  const isGreatCombo = GREAT_COMBOS.has(`${input.genre}|${input.theme}`);
-  const comboBoost = isGreatCombo ? COMBO_STARTING_BONUS : 0;
+  const combination = getCombination(input.genre, input.theme);
+  const comboBoost = combination.quality;
   const sequelBoost = sequel ? 7 + Math.floor(sequel.score / 8) : 0;
   const masteryBoost =
     getKnowledgeLevel(state.genreExperience[input.genre] ?? 0) +
@@ -95,18 +98,19 @@ export function createGameProject(input: GamePlanInput): Project {
     graphics: 4 + Math.floor(masteryBoost / 2) + sequelBoost + directionBoosts.graphics,
     sound: 3 + Math.floor(masteryBoost / 2) + sequelBoost + directionBoosts.sound,
     bugs: 0,
-    hype: 2 + directionBoosts.hype,
+    hype: 2 + directionBoosts.hype + combination.hype,
     marketUsers: input.platform.users,
     stage: "planning",
     stageProgress: 0,
     stageTarget: getStageTarget("planning", input.direction),
     elapsedWeeks: 0,
     sequelOfId: sequel?.id,
+    combination: combination.rating,
     itemUses: 0,
     eventCount: 0,
     challengeCount: 0,
     directionPoints: { ...input.directionPoints },
-    contentPopularity: getContentPopularity(input.genre, input.theme, isGreatCombo),
+    contentPopularity: getCombinationPopularity(input.genre, input.theme),
     debugResearch: 0,
     developmentCost,
   };
@@ -126,31 +130,30 @@ function getAudienceChanges(genre: string, theme: string, points: DirectionPoint
 export function predictGamePlan(input: GamePlanInput): GamePlanPrediction {
   const project = createGameProject(input);
   const forecast = forecastProject(input.state, project);
-  const { durationWeeks, qualityRange } = forecast;
+  const { durationWeeks } = forecast;
   const cost = project.developmentCost ?? 0;
   const cashRatio = cost / Math.max(1, input.state.cash);
   const fatigue = getReleaseFatigueMultiplier(input.state.releases, input.genre, input.theme);
-  const popularity = project.contentPopularity ?? 1;
-  const isGreatCombo = GREAT_COMBOS.has(`${input.genre}|${input.theme}`);
+  const popularity = getContentPopularity(input.genre, input.theme, false);
+  const discovery = input.state.combinationDiscoveries[combinationKey(input.genre, input.theme)];
+  const known = discovery !== undefined && discovery !== "tried";
+  // Two of four initial qualities vary by at most four points across affinity tiers.
+  // Widen their average by two while the player has not confirmed this combination.
+  const qualityRange = forecast.qualityRange && (known ? forecast.qualityRange : {
+    min: Math.max(0, forecast.qualityRange.min - 2),
+    max: forecast.qualityRange.max + 2,
+  });
   const averageEnergy = input.state.staff.length
     ? input.state.staff.reduce((sum, member) => sum + member.energy, 0) / input.state.staff.length
     : 0;
   const yearsRemaining = input.platform.retire >= 99
     ? null
     : Math.max(0, input.platform.retire - input.state.year + 1);
-  const combinationLevel = fatigue < .8
-    ? "内容疲劳"
-    : isGreatCombo
-      ? "杰作相性"
-      : popularity >= 1.05
-        ? "良好"
-        : popularity >= .95
-          ? "普通"
-          : "小众";
+  const combinationLevel = known ? `${getCombination(input.genre, input.theme).label}相性` : discovery === "tried" ? "尝试过 · 相性待确认" : "未发现 · 发售后揭晓";
 
   const advantageCandidates: PredictionFactor[] = [
-    isGreatCombo
-      ? { tone: "positive", text: "类型与题材形成杰作相性" }
+    !known
+      ? { tone: "neutral", text: "相性尚未确认，品质预测包含未知组合的不确定性" }
       : popularity >= 1
         ? { tone: "positive", text: "题材市场接受度较好" }
         : { tone: "neutral", text: "小众组合有明确核心受众" },
@@ -187,6 +190,8 @@ export function predictGamePlan(input: GamePlanInput): GamePlanPrediction {
     cashPressure: input.state.cash < cost ? "无法开工" : cashRatio >= .65 ? "高" : cashRatio >= .35 ? "中" : "低",
     riskLevel: riskPoints >= 2 ? "高" : riskPoints === 1 ? "中" : "低",
     combinationLevel,
+    popularityPercent: Math.round(popularity * 100),
+    fatiguePercent: Math.round(fatigue * 100),
     audience: getAudience(input.genre, input.theme).label,
     audienceChanges: getAudienceChanges(input.genre, input.theme, input.directionPoints),
     marketLevel: marketLabel(input.platform.users),
@@ -228,7 +233,7 @@ export function predictConsole(state: GameState, performance: number, cost: numb
 export type ConsolePrediction = ReturnType<typeof predictConsole>;
 
 export function predictEarlyRelease(state: GameState, project: Project) {
-  const isGreatCombo = GREAT_COMBOS.has(`${project.genre}|${project.theme}`);
+  const isGreatCombo = project.combination ? project.combination === "great" : GREAT_COMBOS.has(`${project.genre}|${project.theme}`);
   const scoreAt = (randomValue: number) => getReviewScores({
     qualities: project,
     isGreatCombo,

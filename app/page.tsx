@@ -2,12 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import {
-  OFFICE_UPGRADE_COSTS,
-  getCareerOptionsFor,
-  getLevelUpCost,
-  getNextSalary,
-} from "./game-balance";
+import { getCareerOptionsFor } from "./game-balance";
 import { GameDashboard } from "./components/game-dashboard";
 import { GameModals } from "./components/game-modals";
 import {
@@ -20,8 +15,6 @@ import {
   GENRES,
   HIRING_METHODS,
   PLATFORMS,
-  ROLE_LEVEL_BOOSTS,
-  ROLE_UNLOCK_RULES,
   SHOP_ITEMS,
   STAGE_INFO,
   STAGE_ORDER,
@@ -33,7 +26,6 @@ import {
   formatCash,
   getAvailablePlatforms,
   getKnowledgeLevel,
-  getOfficeCapacity,
 } from "./game/rules";
 import {
   predictConsole,
@@ -69,10 +61,6 @@ export default function Home() {
     replaceGame,
     dispatchGame,
     setCash,
-    setResearch,
-    setStaff,
-    setCompanyLevel,
-    setUnlockedGenres,
     setCareerManuals,
     setInventory,
     setMerchantYear,
@@ -81,7 +69,6 @@ export default function Home() {
   } = useGameController();
   const {
     cash,
-    research,
     year,
     month,
     week,
@@ -89,11 +76,9 @@ export default function Home() {
     project,
     releases,
     companyLevel,
-    awards,
     ownConsole,
     consoleUsers,
     genreExperience,
-    unlockedGenres,
     careerManuals,
     merchantYear,
     merchantPurchases,
@@ -239,6 +224,7 @@ export default function Home() {
         setModal("event");
       }
       if (effect.type === "review") {
+        persistGame();
         setReview(effect.review);
         setModal("review");
       }
@@ -247,7 +233,7 @@ export default function Home() {
         setModal("result");
       }
     }
-  }, [announce, replaceStageCreation]);
+  }, [announce, replaceStageCreation, persistGame]);
 
   const saveGame = () => {
     if (persistGame()) announce("已保存到这台设备");
@@ -479,31 +465,10 @@ export default function Home() {
   const levelUp = (id: number) => {
     const member = staff.find((item) => item.id === id);
     if (!member) return;
-    if (member.level >= 5) return announce("该职业已达到 Lv.5，可以使用转职手册");
-    const cost = getLevelUpCost(member.level);
-    if (research < cost) return announce(`升级需要 ${cost} 点研究`);
-    const boosts = ROLE_LEVEL_BOOSTS[member.role] ?? { code: 2, scenario: 2, art: 2, sound: 2 };
-    const nextLevel = member.level + 1;
-    setResearch((value) => value - cost);
-    setStaff((members) => members.map((item) => item.id === id ? {
-      ...item,
-      level: nextLevel,
-      code: item.code + (boosts.code ?? 0),
-      scenario: item.scenario + (boosts.scenario ?? 0),
-      art: item.art + (boosts.art ?? 0),
-      sound: item.sound + (boosts.sound ?? 0),
-      salary: getNextSalary(item.salary),
-      masteredRoles: nextLevel === 5
-        ? Array.from(new Set([...(item.masteredRoles ?? []), item.role]))
-        : item.masteredRoles,
-    } : item));
-
-    const unlockedNow = ROLE_UNLOCK_RULES.filter((rule) => rule.role === member.role && rule.level === nextLevel);
-    const newGenres = unlockedNow.filter((rule) => !unlockedGenres.includes(rule.name)).map((rule) => rule.name);
-    if (newGenres.length) setUnlockedGenres((items) => [...items, ...newGenres]);
-    announce(unlockedNow.length
-      ? `${member.name} 升至 Lv.${nextLevel}，解锁“${unlockedNow.map((rule) => rule.name).join("、")}”！`
-      : `${member.name} 升至 Lv.${nextLevel}，能力提升！`);
+    const before = gameRef.current;
+    const result = dispatchGame({ type: "level-up-staff", staffId: id, expectedLevel: member.level, expectedRole: member.role });
+    applyEngineEffects(result.effects);
+    if (result.state !== before) persistGame();
   };
 
   const openTraining = (id: number) => {
@@ -597,29 +562,10 @@ export default function Home() {
   };
 
   const expandOffice = () => {
-    if (companyLevel >= 3) return announce("已经搬入最大的办公室");
-    const nextLevel = companyLevel + 1;
-    const cost = OFFICE_UPGRADE_COSTS[nextLevel as 2 | 3];
-    if (nextLevel === 2 && (year < 4 || releases.length < 1 || cash < 1000)) {
-      return announce("第 4 年后，发售至少 1 款游戏并持有 ¥1,000千 才会收到搬迁邀请");
-    }
-    if (nextLevel === 3 && awards < 1 && year < 10) {
-      return announce("获得至少 1 次奖项，或经营到第 10 年后解锁大楼办公室");
-    }
-    if (cash < cost) return announce(`扩建需要 ${formatCash(cost)}`);
-    setCash((value) => value - cost);
-    setCompanyLevel(nextLevel);
-    setIndustryNews(`像素工坊迁入第 ${nextLevel} 阶段办公室，团队规模进一步扩大。`);
-    setEventData({
-      kind: "office",
-      title: "办公室搬迁",
-      headline: nextLevel === 2 ? "更宽敞的新办公室启用！" : "梦想中的游戏大楼落成！",
-      body: nextLevel === 2
-        ? "团队拥有了更多工位，也解锁了更高级的招聘与培训方式。"
-        : "八个工位、专用会议区与硬件实验室全部就绪，工作室正式迈入顶级开发商行列。",
-      reward: `员工上限提升至 ${getOfficeCapacity(nextLevel)} 人`,
-    });
-    setModal("event");
+    const before = gameRef.current;
+    const result = dispatchGame({ type: "expand-office", expectedLevel: companyLevel });
+    applyEngineEffects(result.effects);
+    if (result.state !== before) persistGame();
   };
 
   const advanceStageSequence = useCallback((phase: Exclude<StageCreationPhase, "select">) => {

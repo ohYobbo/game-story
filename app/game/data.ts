@@ -74,6 +74,10 @@ export const TRAINING_METHODS = [
   { id: "movie", name: "电影鉴赏", note: "学习叙事与画面", cost: 520, energy: 25, gains: { scenario: 3, art: 3 }, unlock: { kind: "theme" as const, name: "太空", role: "编剧", level: 1 } },
   { id: "marathon", name: "热血马拉松", note: "磨炼程序与音效", cost: 380, energy: 30, gains: { code: 3, sound: 2 }, unlock: { kind: "theme" as const, name: "体育", role: "程序员", level: 1 } },
   { id: "pinball", name: "弹珠机特训", note: "全能力都有机会提升", cost: 950, energy: 38, gains: { code: 2, scenario: 2, art: 2, sound: 2 }, unlock: { kind: "theme" as const, name: "电子宠物", role: "程序员", level: 2 } },
+  { id: "mystery", name: "推理研习", note: "分析线索与叙事", cost: 520, energy: 25, gains: { scenario: 4 }, unlock: { kind: "theme" as const, name: "侦探", role: "编剧", level: 2 } },
+  { id: "town", name: "街区写生", note: "观察生活与场景", cost: 520, energy: 25, gains: { art: 4 }, unlock: { kind: "theme" as const, name: "小镇", role: "美术", level: 2 } },
+  { id: "campus", name: "校园采风", note: "体验青春与旋律", cost: 520, energy: 25, gains: { sound: 4 }, unlock: { kind: "theme" as const, name: "校园", role: "音效师", level: 2 } },
+  { id: "creature", name: "生物设计", note: "练习想象力与造型", cost: 700, energy: 30, gains: { art: 3, scenario: 2 }, unlock: { kind: "theme" as const, name: "怪物", role: "美术", level: 3 } },
 ];
 
 export const CONSOLE_CPUS = [

@@ -16,6 +16,8 @@ import {
   getSalesIncome,
   getStageTeamPower,
 } from "../game-balance.ts";
+import { combinationKey, COMBINATION_RULES } from "./combinations.ts";
+import { expandOffice, levelUpStaff, type ProgressionAction } from "./progression.ts";
 import {
   DEFAULT_DIRECTION_POINTS,
   GREAT_COMBOS,
@@ -81,6 +83,7 @@ export type EngineResult = {
 };
 
 export type GameAction =
+  | ProgressionAction
   | { type: "tick"; isNewWeek: boolean; allowStaffChallenge?: boolean }
   | { type: "scheduled-event" }
   | { type: "wait-for-stage-lead" }
@@ -200,7 +203,8 @@ function completeProject(
     };
   }
 
-  const isGreatCombo = GREAT_COMBOS.has(`${finished.genre}|${finished.theme}`);
+  const combination = finished.combination ?? (GREAT_COMBOS.has(`${finished.genre}|${finished.theme}`) ? "great" : "normal");
+  const isGreatCombo = combination === "great";
   const scores = getReviewScores({
     qualities: finished,
     isGreatCombo,
@@ -287,7 +291,7 @@ function completeProject(
       developmentCost: finished.developmentCost,
       sequelOfId: finished.sequelOfId,
       finalQuality: { fun: finished.fun, creativity: finished.creativity, graphics: finished.graphics, sound: finished.sound, bugs: finished.bugs },
-      combo: GREAT_COMBOS.has(`${finished.genre}|${finished.theme}`) ? "great" as const : "normal" as const,
+      combo: combination,
     },
     ...prior,
   ];
@@ -308,6 +312,10 @@ function completeProject(
         state.research + getDirectionConfig(finished.direction).research,
       releases,
       nextReleaseNumber: state.nextReleaseNumber + 1,
+      combinationDiscoveries: {
+        ...state.combinationDiscoveries,
+        [combinationKey(finished.genre, finished.theme)]: finished.combination ?? state.combinationDiscoveries[combinationKey(finished.genre, finished.theme)] ?? "tried",
+      },
       consoleUsers:
         finished.platform === "像素盒子"
           ? state.consoleUsers + Math.round(sales * .18)
@@ -339,6 +347,7 @@ function completeProject(
           { category: "resource", label: "粉丝", value: `+${fanGrowth}`, tone: "positive" },
           { category: "risk", label: "业界口碑", value: `${reputationChange >= 0 ? "+" : ""}${reputationChange}`, tone: reputationChange > 0 ? "positive" : reputationChange < 0 ? "negative" : "neutral", detail: reputationChange === 0 ? "已达数值边界" : undefined },
           { category: "quality", label: "总评分", value: `${totalScore}/40`, tone: totalScore >= 22 ? "positive" : "negative" },
+          { category: "quality", label: "组合相性", value: finished.combination ? COMBINATION_RULES[combination].label : "旧版制作 · 待重新验证", tone: "neutral", detail: `${finished.genre} × ${finished.theme}` },
         ],
       },
     }],
@@ -1552,6 +1561,10 @@ export function applyGameAction(
       return tick(state, action.isNewWeek, action.allowStaffChallenge ?? false, random);
     case "scheduled-event":
       return applyScheduledEvent(state, random);
+    case "level-up-staff":
+      return levelUpStaff(state, action);
+    case "expand-office":
+      return expandOffice(state, action);
     case "wait-for-stage-lead":
       return canWaitForStageLead(state)
         ? noEffects({ ...state, project: { ...state.project!, waitingForLeadRecovery: true } })

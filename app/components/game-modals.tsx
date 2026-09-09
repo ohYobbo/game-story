@@ -2,7 +2,8 @@
 
 import type { Dispatch, SetStateAction } from "react";
 
-import { OFFICE_UPGRADE_COSTS } from "../game-balance";
+import { OFFICE_UPGRADE_COSTS, getLevelUpCost } from "../game-balance";
+import { COMBINATION_RULES } from "../game/combinations";
 import {
   ADVERTISING_METHODS,
   CONSOLE_BODIES,
@@ -291,6 +292,7 @@ export function GameModals({
                 </div>
                 <div className={`combo-note ${planPrediction?.combinationLevel === "杰作相性" ? "great" : ""}`}>
                   组合评价：{planPrediction?.combinationLevel ?? "计算中"}
+                  <small>市场流行度 {planPrediction?.popularityPercent ?? "—"}% · 近期需求保留 {planPrediction?.fatiguePercent ?? "—"}%</small>
                 </div>
                 <div className="field-label">开发方针</div>
                 <div className="direction-row">
@@ -449,7 +451,7 @@ export function GameModals({
                   <StaffAvatar staff={member} className="mini-avatar" />
                   <div className="staff-info"><b>{member.name}<em>Lv.{member.level}</em></b><small>{member.role} · 年薪 {formatCash(member.salary)} · Power {member.maxPower} · 体力 {Math.round(member.energy)}%</small><div><span>程 {member.code}</span><span>剧 {member.scenario}</span><span>画 {member.art}</span><span>音 {member.sound}</span></div></div>
                   <div className="staff-actions">
-                    <button onClick={() => levelUp(member.id)}>升级<small>◆{5 + member.level * 4}</small></button>
+                    <button onClick={() => levelUp(member.id)}>升级<small>◆{getLevelUpCost(member.level)}</small></button>
                     <button onClick={() => openTraining(member.id)}>培训<small>现金</small></button>
                     <button onClick={() => openCareer(member.id)}>转职<small>手册</small></button>
                   </div>
@@ -635,11 +637,13 @@ export function GameModals({
               <div><b>题材熟练度</b>{unlockedThemes.map((item) => <span key={item}>{item}<em>Lv.{getKnowledgeLevel(themeExperience[item] ?? 0)}</em></span>)}</div>
             </div>
             <div className="release-table">
+              <p><b>组合发现记录</b> · 发售后揭晓相性；尝试过的旧组合需再次发售确认。</p>
+              {Object.entries(game.combinationDiscoveries).map(([key, rating]) => <p key={key}>{key.replace("|", " × ")}：{rating === "tried" ? "尝试过 · 相性待确认" : COMBINATION_RULES[rating].label}</p>)}
               <p>展示最近 32 部；统计与销售保留全部作品。作品收益 = 累计销售收入 − 立项开发费，不含薪资、广告、外援、道具和挑战投入。</p>
               {game.releaseHistoryIncomplete && <p>旧记录不完整：已丢失作品无法恢复；统计仅含保留作品，缺失品质、组合及开发费显示未知。</p>}
               {releases.length ? releases.slice(0, 32).map((item) => (
                 <div key={item.id}>
-                  <span><b>{item.name}{item.sequelEligible ? " · 名人堂" : ""}</b><small>{item.audience ?? "受众未知"} · 发售 {item.weeks} 周</small><small>{item.genre ?? "类型未知"} × {item.theme ?? "题材未知"} · {item.combo === undefined ? "组合未知" : item.combo === "great" ? "杰作组合" : "普通组合"}</small><small>{item.finalQuality ? `趣味 ${item.finalQuality.fun.toFixed(1)} / 创意 ${item.finalQuality.creativity.toFixed(1)} / 画面 ${item.finalQuality.graphics.toFixed(1)} / 音乐 ${item.finalQuality.sound.toFixed(1)} / 漏洞 ${item.finalQuality.bugs.toFixed(1)}` : "发售品质未知"}</small><small>开发费 {item.developmentCost === undefined ? "未知" : formatCash(item.developmentCost)} · 作品收益 {item.developmentCost === undefined ? "未知" : `${Math.round(item.income - item.developmentCost).toLocaleString()} 千`}</small></span>
+                  <span><b>{item.name}{item.sequelEligible ? " · 名人堂" : ""}</b><small>{item.audience ?? "受众未知"} · 发售 {item.weeks} 周</small><small>{item.genre ?? "类型未知"} × {item.theme ?? "题材未知"} · {item.combo === undefined ? "组合未知" : `${COMBINATION_RULES[item.combo].label}组合`}</small><small>{item.finalQuality ? `趣味 ${item.finalQuality.fun.toFixed(1)} / 创意 ${item.finalQuality.creativity.toFixed(1)} / 画面 ${item.finalQuality.graphics.toFixed(1)} / 音乐 ${item.finalQuality.sound.toFixed(1)} / 漏洞 ${item.finalQuality.bugs.toFixed(1)}` : "发售品质未知"}</small><small>开发费 {item.developmentCost === undefined ? "未知" : formatCash(item.developmentCost)} · 作品收益 {item.developmentCost === undefined ? "未知" : `${Math.round(item.income - item.developmentCost).toLocaleString()} 千`}</small></span>
                   <em>{item.score}/40</em>
                   <strong>{item.sales.toLocaleString()} 套<small>本周 {(item.weeklySales ?? 0).toLocaleString()} · 第 {item.weeklyRank ?? "—"} 名</small></strong>
                 </div>
