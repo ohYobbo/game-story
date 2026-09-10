@@ -198,8 +198,8 @@ test("engine forecasts cover independent seeds across directions, combinations a
 
 test("tired teams include recovery while empty teams have no misleading finite forecast", () => {
   const initial = createInitialGameState();
-  const input = planInput({ ...initial, cash: 1000, staff: initial.staff.map(member => ({ ...member, resting: true, energy: 5 })) });
-  input.platform = { ...input.platform, retire: initial.year };
+  const input = planInput({ ...initial, year: 5, cash: 1000, staff: initial.staff.map(member => ({ ...member, resting: true, energy: 5 })) });
+  input.platform = PLATFORMS[1];
   const prediction = predictGamePlan(input);
   assert.ok(prediction.durationWeeks);
   assert.ok(forecastProject(input.state, prediction.project).recoveryRuns > 0);

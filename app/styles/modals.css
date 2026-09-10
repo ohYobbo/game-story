@@ -128,6 +128,14 @@
 .platform-grid button.selected small,
 .direction-row button.selected small { color: #ffe1a4; }
 
+.platform-grid button { height: auto; overflow-wrap: anywhere; }
+.platform-grid button.selected em { color: #fff2c5; }
+.platform-calendar { margin: 10px 0; font-size: 10px; }
+.platform-calendar summary { cursor: pointer; }
+.platform-calendar p { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.platform-calendar span { color: #675d49; }
+.platform-terms { margin: 10px 0 0; color: #675d49; font-size: 10px; line-height: 1.6; }
+
 .ui-icon.hardware-icon,
 .ui-icon.platform-icon,
 .ui-icon.external-star,

@@ -1,4 +1,5 @@
-import { getContentPopularity, getDevelopmentCost, getFirstWeekSales, getReleaseFatigueMultiplier, getReviewScores, getGeneralQualityGain } from "../game-balance.ts";
+import { getContentPopularity, getFirstWeekSales, getReleaseFatigueMultiplier, getReviewScores, getGeneralQualityGain } from "../game-balance.ts";
+import { getPlatformQuote, type PlatformPhase } from "./platforms.ts";
 import { combinationKey, getCombination, getCombinationPopularity } from "./combinations.ts";
 import { CONTRACTS, GREAT_COMBOS } from "./data.ts";
 import { getAudience, getDirectionAudienceGains, getDirectionBoosts, getDirectionConfig, getKnowledgeLevel, getStageTarget } from "./rules.ts";
@@ -35,6 +36,12 @@ export type GamePlanPrediction = {
   project: Project;
   cost: number;
   cashRatio: number;
+  productionCost: number;
+  platformDevelopmentFee: number;
+  licenseFee: number;
+  platformPhase: PlatformPhase;
+  platformWeeksRemaining: number | null;
+  marketEvent: string | null;
   durationWeeks: NumberRange | null;
   qualityRange: NumberRange | null;
   qualityLevel: string;
@@ -77,12 +84,8 @@ export function createGameProject(input: GamePlanInput): Project {
     getKnowledgeLevel(state.themeExperience[input.theme] ?? 0) - 2;
   const directionConfig = getDirectionConfig(input.direction);
   const directionBoosts = getDirectionBoosts(input.directionPoints);
-  const developmentCost = getDevelopmentCost(
-    input.platform.cost,
-    input.genre,
-    input.theme,
-    directionConfig.cost,
-  );
+  const quote = getPlatformQuote(state, { ...input, platform: input.platform.name });
+  if (!quote) throw new Error("该平台尚未上市或已经退市");
 
   return {
     kind: "game",
@@ -99,7 +102,10 @@ export function createGameProject(input: GamePlanInput): Project {
     sound: 3 + Math.floor(masteryBoost / 2) + sequelBoost + directionBoosts.sound,
     bugs: 0,
     hype: 2 + directionBoosts.hype + combination.hype,
-    marketUsers: input.platform.users,
+    marketUsers: quote.platform.users,
+    platformDevelopmentFee: quote.platform.cost,
+    licenseFee: quote.licenseFee,
+    productionCost: quote.productionCost,
     stage: "planning",
     stageProgress: 0,
     stageTarget: getStageTarget("planning", input.direction),
@@ -112,7 +118,7 @@ export function createGameProject(input: GamePlanInput): Project {
     directionPoints: { ...input.directionPoints },
     contentPopularity: getCombinationPopularity(input.genre, input.theme),
     debugResearch: 0,
-    developmentCost,
+    developmentCost: quote.total,
   };
 }
 
@@ -129,6 +135,7 @@ function getAudienceChanges(genre: string, theme: string, points: DirectionPoint
 
 export function predictGamePlan(input: GamePlanInput): GamePlanPrediction {
   const project = createGameProject(input);
+  const { platform } = getPlatformQuote(input.state, project)!;
   const forecast = forecastProject(input.state, project);
   const { durationWeeks } = forecast;
   const cost = project.developmentCost ?? 0;
@@ -146,9 +153,7 @@ export function predictGamePlan(input: GamePlanInput): GamePlanPrediction {
   const averageEnergy = input.state.staff.length
     ? input.state.staff.reduce((sum, member) => sum + member.energy, 0) / input.state.staff.length
     : 0;
-  const yearsRemaining = input.platform.retire >= 99
-    ? null
-    : Math.max(0, input.platform.retire - input.state.year + 1);
+  const yearsRemaining = platform.weeksRemaining === null ? null : Math.ceil(platform.weeksRemaining / 48);
   const combinationLevel = known ? `${getCombination(input.genre, input.theme).label}相性` : discovery === "tried" ? "尝试过 · 相性待确认" : "未发现 · 发售后揭晓";
 
   const advantageCandidates: PredictionFactor[] = [
@@ -160,9 +165,9 @@ export function predictGamePlan(input: GamePlanInput): GamePlanPrediction {
     averageEnergy >= 70
       ? { tone: "positive", text: `团队平均体力 ${Math.round(averageEnergy)}%，制作状态充足` }
       : { tone: "neutral", text: `团队平均体力 ${Math.round(averageEnergy)}%，需安排休息` },
-    input.platform.users >= 700_000
-      ? { tone: "positive", text: `${input.platform.name}拥有${marketLabel(input.platform.users)}市场` }
-      : { tone: "neutral", text: `${input.platform.name}授权成本较低` },
+    platform.users >= 700_000
+      ? { tone: "positive", text: `${platform.name}拥有${marketLabel(platform.users)}市场` }
+      : { tone: "neutral", text: `${platform.name}拥有${marketLabel(platform.users)}市场` },
     input.sequel
       ? { tone: "positive", text: `续作继承《${input.sequel.name}》的开发积累` }
       : { tone: "neutral", text: `${input.direction}方针决定速度与品质取舍` },
@@ -173,7 +178,9 @@ export function predictGamePlan(input: GamePlanInput): GamePlanPrediction {
   if (forecast.blockedRuns) risks.push({ tone: "negative", text: `${forecast.blockedRuns}/${forecast.sampleCount} 次模拟无法由内部团队完成，需调整人员或邀请外援` });
   if (input.state.cash < cost) risks.push({ tone: "negative", text: `资金缺口 ${cost - input.state.cash}千，当前无法开工` });
   else if (cashRatio >= .65) risks.push({ tone: "negative", text: `开发费占现金 ${Math.round(cashRatio * 100)}%，现金压力高` });
-  if (yearsRemaining !== null && yearsRemaining <= 1) risks.push({ tone: "negative", text: `${input.platform.name}将在本年退市` });
+  if (platform.phase === "衰退期") risks.push({ tone: "negative", text: "平台费用下调，但活跃用户持续收缩" });
+  if (platform.weeksRemaining !== null && platform.weeksRemaining <= 48) risks.push({ tone: "negative", text: `${platform.name}将在 ${platform.weeksRemaining} 周后退市；此后无法开新作` });
+  if (platform.weeksRemaining !== null && durationWeeks && durationWeeks.max >= platform.weeksRemaining) risks.push({ tone: "negative", text: "预计开发可能跨过退市日；可继续发售，沿用开工时锁定的用户量" });
   if (fatigue < 1) risks.push({ tone: "negative", text: `近期重复内容使市场需求降至 ${Math.round(fatigue * 100)}%` });
   if (averageEnergy < 45) risks.push({ tone: "negative", text: "团队体力偏低，开发中可能休息" });
   if (risks.length < 2) risks.push({ tone: "neutral", text: "开发事件可能改变常规周期与品质" });
@@ -184,6 +191,12 @@ export function predictGamePlan(input: GamePlanInput): GamePlanPrediction {
     project,
     cost,
     cashRatio,
+    productionCost: project.productionCost!,
+    platformDevelopmentFee: platform.cost,
+    licenseFee: project.licenseFee!,
+    platformPhase: platform.phase,
+    platformWeeksRemaining: platform.weeksRemaining,
+    marketEvent: platform.marketEvent,
     durationWeeks,
     qualityRange,
     qualityLevel: qualityRange ? qualityLabel((qualityRange.min + qualityRange.max) / 2) : "无法估计",
@@ -194,8 +207,8 @@ export function predictGamePlan(input: GamePlanInput): GamePlanPrediction {
     fatiguePercent: Math.round(fatigue * 100),
     audience: getAudience(input.genre, input.theme).label,
     audienceChanges: getAudienceChanges(input.genre, input.theme, input.directionPoints),
-    marketLevel: marketLabel(input.platform.users),
-    marketUsers: input.platform.users,
+    marketLevel: marketLabel(platform.users),
+    marketUsers: platform.users,
     platformYearsRemaining: yearsRemaining,
     advantages,
     risks,

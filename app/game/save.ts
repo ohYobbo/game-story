@@ -14,7 +14,7 @@ import {
 import type { GameState, LegacySaveState, SaveState } from "./types";
 import { combinationKey } from "./combinations.ts";
 
-export const SAVE_SCHEMA_VERSION = 8;
+export const SAVE_SCHEMA_VERSION = 9;
 export const SAVE_STORAGE_KEY = "pixel-studio-save";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -127,6 +127,13 @@ export function migrateSave(value: unknown): GameState | null {
     releases,
     nextReleaseNumber,
     combinationDiscoveries,
+    platformLicenses: [...new Set([
+      ...(Array.isArray(saved.platformLicenses) ? saved.platformLicenses.filter(name => typeof name === "string") : []),
+      ...((saved.schemaVersion ?? 0) < 9 ? [
+        ...releases.map(item => item.platform),
+        project?.kind === "game" ? project.platform : undefined,
+      ].filter((name): name is string => Boolean(name)) : []),
+    ])],
     releaseHistoryIncomplete: saved.releaseHistoryIncomplete ?? (releases.length > 0 && (saved.schemaVersion ?? 0) < 7),
     companyLevel,
     awards: saved.awards ?? 0,
@@ -171,6 +178,7 @@ export function serializeGameState(state: GameState): SaveState {
     inventory: { ...state.inventory },
     lastStageLeads: { ...state.lastStageLeads },
     combinationDiscoveries: { ...state.combinationDiscoveries },
+    platformLicenses: [...state.platformLicenses],
     schemaVersion: SAVE_SCHEMA_VERSION,
     balanceVersion: BALANCE_VERSION,
   };

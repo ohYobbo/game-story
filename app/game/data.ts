@@ -15,11 +15,11 @@ export const INITIAL_STAFF: Staff[] = [
 ];
 
 export const PLATFORMS = [
-  { name: "个人电脑", cost: 20, users: 280_000, debut: 1, retire: 99 },
-  { name: "豆豆机", cost: 350, users: 740_000, debut: 1, retire: 5 },
-  { name: "迷你掌机", cost: 700, users: 1_260_000, debut: 2, retire: 8 },
-  { name: "星球盒", cost: 1200, users: 1_720_000, debut: 4, retire: 11 },
-  { name: "幻彩 32", cost: 1800, users: 2_350_000, debut: 6, retire: 99 },
+  { name: "个人电脑", cost: 10, licenseFee: 10, users: 280_000, debut: 1, retire: 99 },
+  { name: "豆豆机", cost: 150, licenseFee: 200, users: 740_000, debut: 1, retire: 5 },
+  { name: "迷你掌机", cost: 300, licenseFee: 400, users: 1_260_000, debut: 2, retire: 8 },
+  { name: "星球盒", cost: 500, licenseFee: 700, users: 1_720_000, debut: 4, retire: 11 },
+  { name: "幻彩 32", cost: 800, licenseFee: 1000, users: 2_350_000, debut: 6, retire: 99 },
 ];
 
 export const GENRES = ["桌游", "冒险", "益智", "知识问答", "教育"];

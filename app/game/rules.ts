@@ -1,11 +1,11 @@
 import { STAGE_TARGETS, type ProductionStage } from "../game-balance.ts";
+import { getPlatformMarkets } from "./platforms.ts";
 import {
   DEFAULT_DIRECTION_POINTS,
   DIRECTIONS,
   INITIAL_FAN_SEGMENTS,
   INITIAL_INVENTORY,
   INITIAL_STAFF,
-  PLATFORMS,
 } from "./data.ts";
 import type {
   DirectionPoints,
@@ -150,22 +150,11 @@ export function getAvailablePlatforms(
   year: number,
   ownConsole: boolean,
   consoleUsers: number,
+  month = 1,
+  week = 1,
 ) {
-  const market = PLATFORMS.filter(
-    (item) => year >= item.debut && year <= item.retire,
-  );
-  return ownConsole
-    ? [
-        ...market,
-        {
-          name: "像素盒子",
-          cost: 0,
-          users: Math.max(220_000, consoleUsers),
-          debut: year,
-          retire: 99,
-        },
-      ]
-    : market;
+  return getPlatformMarkets({ year, month, week, ownConsole, consoleUsers })
+    .filter(item => item.phase !== "未上市" && item.phase !== "退市");
 }
 
 export function advanceCalendar(
@@ -190,6 +179,7 @@ export function createInitialGameState(): GameState {
     nextReleaseNumber: 1,
     releaseHistoryIncomplete: false,
     combinationDiscoveries: {},
+    platformLicenses: [],
     companyLevel: 1,
     awards: 0,
     ownConsole: false,

@@ -18,6 +18,7 @@ import {
   getStageTeamPower,
 } from "../game-balance.ts";
 import { combinationKey, COMBINATION_RULES } from "./combinations.ts";
+import { getPlatformMarkets, getPlatformQuote } from "./platforms.ts";
 import { expandOffice, levelUpStaff, type ProgressionAction } from "./progression.ts";
 import {
   DEFAULT_DIRECTION_POINTS,
@@ -993,7 +994,7 @@ export function applyScheduledEvent(
     };
   }
 
-  if (state.month === 6 && state.week === 1) {
+  if (state.month === 1 && state.week === 1) {
     const debut = PLATFORMS.find(
       (item) => item.debut === state.year && item.debut > 1,
     );
@@ -1006,12 +1007,35 @@ export function applyScheduledEvent(
             kind: "market",
             title: "游戏行业快讯",
             headline: `新主机“${debut.name}”上市！`,
-            body: "新平台正在迅速吸引玩家。授权费用不低，但庞大的用户市场可能带来惊人的销量。",
-            reward: `首发用户 ${formatUsers(debut.users)} · 开发授权 ${formatCash(debut.cost)}`,
+            body: "平台从本年 1 月开放开发，用户将随市场周期成长。确认开工才支付首次授权费。",
+            reward: `首发用户 ${formatUsers(getPlatformMarkets(state).find(p => p.name === debut.name)!.users)} · 每作平台开发费 ${formatCash(debut.cost)} · 首次授权 ${formatCash(debut.licenseFee)}`,
           },
         }],
       };
     }
+  }
+
+  if (state.month === 6 && state.week === 1) {
+    const platform = getPlatformMarkets(state).find(p => p.marketEvent);
+    if (platform) return {
+      state: { ...state, lastEventKey: eventKey, industryNews: `${platform.name}夏季推广：活跃用户 +15%，持续至 7 月末。` },
+      effects: [{ type: "event", event: {
+        kind: "market", title: "平台夏季推广", headline: `${platform.name}吸引新玩家`,
+        body: "6–7 月活跃用户提高 15%，8 月恢复正常市场曲线。此期间开工的作品锁定推广后的用户量，后续发售仍沿用该值。",
+        reward: `当前用户 ${formatUsers(platform.users)}`,
+      } }],
+    };
+  }
+
+  if (state.month === 10 && state.week === 1) {
+    const retiring = getPlatformMarkets(state).filter(p => p.retire === state.year);
+    if (retiring.length) return {
+      state: { ...state, lastEventKey: eventKey },
+      effects: [{ type: "event", event: {
+        kind: "market", title: "平台退市预告", headline: `${retiring.map(p => p.name).join("、")}将在本年末退市`,
+        body: "还有 12 周可开新作。平台费用已下调，活跃用户持续收缩；已开工项目可继续完成并发售，沿用开工时锁定的用户量。",
+      } }],
+    };
   }
 
   if (state.month === 12 && state.week === 1) {
@@ -1545,12 +1569,28 @@ export function applyGameAction(
       return canWaitForStageLead(state)
         ? noEffects({ ...state, project: { ...state.project!, waitingForLeadRecovery: true } })
         : noEffects(state);
-    case "start-project":
+    case "start-project": {
+      if (state.project) return noEffects(state);
+      const quote = action.project.kind === "game" ? getPlatformQuote(state, action.project) : null;
+      if (action.project.kind === "game" && !quote) return {
+        state, effects: [{ type: "toast", message: "该平台尚未上市或已经退市，无法开工" }],
+      };
+      const cost = quote?.total ?? action.cost ?? 0;
+      if (!Number.isFinite(cost) || cost < 0 || state.cash < cost) return {
+        state, effects: [{ type: "toast", message: "资金不足，无法支付开工总成本" }],
+      };
       return noEffects({
         ...state,
-        cash: state.cash - (action.cost ?? 0),
-        project: action.project,
+        cash: state.cash - cost,
+        platformLicenses: quote && !state.platformLicenses.includes(quote.platform.name)
+          ? [...state.platformLicenses, quote.platform.name] : state.platformLicenses,
+        project: quote ? {
+          ...action.project, developmentCost: cost, productionCost: quote.productionCost,
+          platformDevelopmentFee: quote.platform.cost, licenseFee: quote.licenseFee,
+          marketUsers: quote.platform.users,
+        } : action.project,
       });
+    }
     case "choose-lead":
       return chooseStageLead(state, action, random);
     case "apply-marketing":

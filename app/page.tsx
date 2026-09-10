@@ -24,6 +24,7 @@ import {
   clamp,
   formatCash,
   getAvailablePlatforms,
+  formatUsers,
   getKnowledgeLevel,
 } from "./game/rules";
 import {
@@ -128,8 +129,8 @@ export default function Home() {
   const persistGame = useCallback(() => persistenceRef.current?.save() ?? false, []);
 
   const availablePlatforms = useMemo(() => {
-    return getAvailablePlatforms(year, ownConsole, consoleUsers);
-  }, [year, ownConsole, consoleUsers]);
+    return getAvailablePlatforms(year, ownConsole, consoleUsers, month, week);
+  }, [year, ownConsole, consoleUsers, month, week]);
 
   const selectedStaff = staff.find((member) => member.id === selectedStaffId) ?? null;
   const merchantOpen = year >= 2 && month === 5 && week === 2;
@@ -267,6 +268,7 @@ export default function Home() {
 
   useEffect(() => {
     if (week !== 1 || modal || stageCreation) return;
+    if (gameRef.current.year !== year || gameRef.current.month !== month || gameRef.current.week !== week) return;
     const chartEntry = releases
       .filter((item) => (item.weeklySales ?? 0) > 0)
       .sort((a, b) => (a.weeklyRank ?? 99) - (b.weeklyRank ?? 99))[0];
@@ -274,9 +276,11 @@ export default function Home() {
       setIndustryNews(`本月销量快讯：《${chartEntry.name}》以每周 ${(chartEntry.weeklySales ?? 0).toLocaleString()} 套位列第 ${chartEntry.weeklyRank ?? "—"} 名。`);
     } else {
       const platform = availablePlatforms[availablePlatforms.length - 1];
-      setIndustryNews(`${platform?.name ?? "个人电脑"}市场持续升温，玩家期待下一款热门作品。`);
+      setIndustryNews(platform
+        ? `${platform.name} · ${platform.phase} · 活跃用户 ${formatUsers(platform.users)}${platform.marketEvent ? ` · ${platform.marketEvent}` : ""}`
+        : "暂无可开发平台。");
     }
-  }, [month, week, modal, stageCreation, releases, availablePlatforms, setIndustryNews]);
+  }, [year, month, week, modal, stageCreation, releases, availablePlatforms, setIndustryNews, gameRef]);
 
   useEffect(() => {
     if (paused || modal || stageCreation) return;
@@ -308,11 +312,17 @@ export default function Home() {
     if (project) return announce("当前项目完成后才能开发新作");
     if (remainingDirectionPoints > 0) return announce(`还有 ${remainingDirectionPoints} 点开发方向尚未分配`);
     if (cash < selectedDevelopmentCost) return announce("资金不足，先接一份外包吧");
-    dispatchGame({
+    const before = gameRef.current;
+    const result = dispatchGame({
       type: "start-project",
       cost: selectedDevelopmentCost,
       project: planPrediction.project,
     });
+    if (result.state === before) {
+      applyEngineEffects(result.effects);
+      return;
+    }
+    persistGame();
     setSelectedSequelId("");
     setSelectedDirectionPoints(DEFAULT_DIRECTION_POINTS);
     replaceStageCreation({ phase: "select", stage: "planning" });

@@ -126,6 +126,9 @@ export type Project = {
   hype: number;
   reward?: number;
   marketUsers?: number;
+  platformDevelopmentFee?: number;
+  licenseFee?: number;
+  productionCost?: number;
   stage?: ProductionStage;
   stageProgress?: number;
   stageTarget?: number;
@@ -202,6 +205,7 @@ export type GameState = {
   nextReleaseNumber: number;
   releaseHistoryIncomplete: boolean;
   combinationDiscoveries: Record<string, CombinationDiscovery>;
+  platformLicenses: string[];
   companyLevel: number;
   awards: number;
   ownConsole: boolean;

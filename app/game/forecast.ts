@@ -19,6 +19,7 @@ export function simulateProject(
   allowStaffChallenge = true,
 ) {
   let state = applyGameAction(initial, { type: "start-project", project, cost: project.developmentCost ?? 0 }, random).state;
+  if (!state.project) return { state, finalProject: project, review: null, weeks: 0, blocked: true, challenges: 0, recoveryWeeks: 0 };
   let finalProject = project;
   let review = null;
   let challenges = 0;
@@ -65,7 +66,9 @@ function observedRange(values: number[]): NumberRange | null {
 
 export function forecastProject(state: GameState, project: Project) {
   // Fixed samples keep previews stable. These are observed ranges, not guaranteed bounds.
-  const samples = Array.from({ length: 64 }, (_, index) => simulateProject(state, project, seededRandom(index + 1)));
+  // Duration assumes the displayed start budget is available; cash pressure is reported separately.
+  const funded = { ...state, project: null, cash: Math.max(state.cash, project.developmentCost ?? 0) };
+  const samples = Array.from({ length: 64 }, (_, index) => simulateProject(funded, project, seededRandom(index + 1)));
   const completed = samples.filter((sample) => !sample.blocked);
   return {
     sampleCount: samples.length,

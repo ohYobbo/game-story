@@ -4,6 +4,7 @@ import type { Dispatch, SetStateAction } from "react";
 
 import { CAREER_REQUIREMENTS, OFFICE_UPGRADE_COSTS, getCareerOptionsFor, getLevelUpCost } from "../game-balance";
 import { getOfficeUnlocks } from "../game/progression";
+import { getPlatformMarkets, type PlatformMarket } from "../game/platforms";
 import { COMBINATION_RULES } from "../game/combinations";
 import {
   ADVERTISING_METHODS,
@@ -59,14 +60,6 @@ import type {
 } from "../game/types";
 import { ModalShell, ResultEntries, StaffAvatar, UiIcon } from "./pixel-ui";
 
-type Platform = {
-  name: string;
-  cost: number;
-  users: number;
-  debut: number;
-  retire: number;
-};
-
 type GameModalsProps = {
   game: GameState;
   modal: Modal;
@@ -79,7 +72,7 @@ type GameModalsProps = {
   planPrediction: GamePlanPrediction | null;
   consolePrediction: ConsolePrediction | null;
   selectedStaff: Staff | null;
-  availablePlatforms: Platform[];
+  availablePlatforms: PlatformMarket[];
   sequelCandidates: GameState["releases"];
   hasHardwareEngineer: boolean;
   hardwareEngineerCount: number;
@@ -282,10 +275,19 @@ export function GameModals({
                   {availablePlatforms.map((item) => (
                     <button key={item.name} className={selectedPlatform === item.name ? "selected" : ""} onClick={() => setSelectedPlatform(item.name)}>
                       <UiIcon index={21} className="platform-icon" />
-                      <b>{item.name}</b><small>用户 {formatUsers(item.users)}</small><em>{formatCash(item.cost)}</em>
+                      <b>{item.name}</b><small>{item.phase} · 用户 {formatUsers(item.users)}</small>
+                      <small>{item.weeksRemaining === null ? "长期运营" : `${item.weeksRemaining} 周后退市`}</small>
+                      <em>每作开发 {formatCash(item.cost)}</em>
+                      <small>{game.platformLicenses.includes(item.name) ? "已授权 · 无需再次付费" : item.name === "像素盒子" ? "自研平台 · 免授权费" : `首次授权 ${formatCash(item.licenseFee)}`}</small>
                     </button>
                   ))}
                 </div>
+                <details className="platform-calendar">
+                  <summary>平台上市与退市日历</summary>
+                  {getPlatformMarkets(game).filter(item => item.name !== "像素盒子").map(item => (
+                    <p key={item.name}><b>{item.name} · {item.phase}</b><span>第 {item.debut} 年 1 月上市 · {item.retire >= 99 ? "长期运营" : `第 ${item.retire} 年末退市`}</span></p>
+                  ))}
+                </details>
                 <div className="two-columns">
                   <label className="field-label">游戏类型<select value={selectedGenre} disabled={Boolean(selectedSequelId)} onChange={(e) => setSelectedGenre(e.target.value)}>{unlockedGenres.map((item) => <option key={item} value={item}>{item} Lv.{getKnowledgeLevel(genreExperience[item] ?? 0)}</option>)}</select></label>
                   <label className="field-label">游戏题材<select value={selectedTheme} disabled={Boolean(selectedSequelId)} onChange={(e) => setSelectedTheme(e.target.value)}>{unlockedThemes.map((item) => <option key={item} value={item}>{item} Lv.{getKnowledgeLevel(themeExperience[item] ?? 0)}</option>)}</select></label>
@@ -316,15 +318,16 @@ export function GameModals({
                 </div>
                 {planPrediction && (
                   <section className="prediction-panel" aria-label="企划预测摘要">
-                    <div className="prediction-title"><b>企划确认摘要</b><small>64 次固定样本的观测范围，并非保证；每阶段选择开工品质最高的可用内部负责人，无人可用时计入等待恢复时间；跳过员工挑战，不追加培训、宣传或道具</small></div>
+                    <div className="prediction-title"><b>企划确认摘要</b><small>64 次固定样本的观测范围，并非保证；假定已备齐开工资金，每阶段选择开工品质最高的可用内部负责人，无人可用时计入等待恢复时间；跳过员工挑战，不追加培训、宣传或道具</small></div>
                     <div className="prediction-metrics">
-                      <span><small>开发总成本</small><b>{formatCash(planPrediction.cost)}</b><em>现金 {Math.round(planPrediction.cashRatio * 100)}%</em></span>
+                      <span><small>开工总成本</small><b>{formatCash(planPrediction.cost)}</b><em>制作费 {formatCash(planPrediction.productionCost)}（含平台基础开发费 {formatCash(planPrediction.platformDevelopmentFee)}，随方针计算）＋首次授权 {formatCash(planPrediction.licenseFee)}</em></span>
                       <span><small>常规周期</small><b>{planPrediction.durationWeeks ? `${planPrediction.durationWeeks.min}–${planPrediction.durationWeeks.max} 周` : "无法估计"}</b><em>含预计除错</em></span>
                       <span><small>品质倾向</small><b>{planPrediction.qualityLevel}</b><em>{planPrediction.qualityRange ? `${planPrediction.qualityRange.min}–${planPrediction.qualityRange.max}` : "无可完成样本"}</em></span>
                       <span><small>现金 / 风险</small><b>{planPrediction.cashPressure} / {planPrediction.riskLevel}</b><em>确认前检查</em></span>
-                      <span><small>平台市场</small><b>{planPrediction.marketLevel} · {formatUsers(planPrediction.marketUsers)}</b><em>{planPrediction.platformYearsRemaining === null ? "长期运营" : `剩余 ${planPrediction.platformYearsRemaining} 年`}</em></span>
+                      <span><small>平台市场 · {planPrediction.platformPhase}</small><b>{planPrediction.marketLevel} · {formatUsers(planPrediction.marketUsers)}</b><em>{planPrediction.platformWeeksRemaining === null ? "长期运营" : `${planPrediction.platformWeeksRemaining} 周后退市`}{planPrediction.marketEvent && ` · ${planPrediction.marketEvent}`}</em></span>
                       <span><small>核心受众</small><b>{planPrediction.audience}</b><em>{planPrediction.audienceChanges.join(" · ")}</em></span>
                     </div>
+                    <p className="platform-terms">确认开工一次性扣除总成本，取消企划不收费。首次授权永久保留；市场用户量在开工时锁定，开发中退市仍可完成发售。推广结束不会改变已开工作品的用户量。</p>
                     <div className="prediction-factors">
                       <div><b>预期优势</b>{planPrediction.advantages.map((factor) => <span className={`is-${factor.tone}`} key={factor.text}>＋ {factor.text}</span>)}</div>
                       <div><b>主要风险</b>{planPrediction.risks.map((factor) => <span className={`is-${factor.tone}`} key={factor.text}>！ {factor.text}</span>)}</div>
