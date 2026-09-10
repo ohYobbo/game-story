@@ -69,7 +69,14 @@ export const STAGE_INFO: Record<ProductionStage, { label: string; short: string;
   debug: { label: "最终除错", short: "除错", skill: "code", note: "全员找出漏洞，准备发售" },
 };
 
-export const TRAINING_METHODS = [
+export type TrainingMethod = {
+  id: string; name: string; note: string; cost: number; energy: number;
+  gains: Partial<Pick<Staff, "code" | "scenario" | "art" | "sound">>;
+  officeLevel?: number; requiredRole?: string;
+  unlock: { kind: "theme"; name: string; role: string; level: number };
+};
+
+export const TRAINING_METHODS: TrainingMethod[] = [
   { id: "reading", name: "阅读资料", note: "强化剧本与创意", cost: 240, energy: 18, gains: { scenario: 4 }, unlock: { kind: "theme" as const, name: "幻想", role: "编剧", level: 2 } },
   { id: "movie", name: "电影鉴赏", note: "学习叙事与画面", cost: 520, energy: 25, gains: { scenario: 3, art: 3 }, unlock: { kind: "theme" as const, name: "太空", role: "编剧", level: 1 } },
   { id: "marathon", name: "热血马拉松", note: "磨炼程序与音效", cost: 380, energy: 30, gains: { code: 3, sound: 2 }, unlock: { kind: "theme" as const, name: "体育", role: "程序员", level: 1 } },
@@ -78,6 +85,10 @@ export const TRAINING_METHODS = [
   { id: "town", name: "街区写生", note: "观察生活与场景", cost: 520, energy: 25, gains: { art: 4 }, unlock: { kind: "theme" as const, name: "小镇", role: "美术", level: 2 } },
   { id: "campus", name: "校园采风", note: "体验青春与旋律", cost: 520, energy: 25, gains: { sound: 4 }, unlock: { kind: "theme" as const, name: "校园", role: "音效师", level: 2 } },
   { id: "creature", name: "生物设计", note: "练习想象力与造型", cost: 700, energy: 30, gains: { art: 3, scenario: 2 }, unlock: { kind: "theme" as const, name: "怪物", role: "美术", level: 3 } },
+  { id: "tactics", name: "战术沙盘", note: "专注系统与叙事，牺牲音乐练习", cost: 1100, energy: 35, officeLevel: 2, requiredRole: "总监", gains: { code: 5, scenario: 5, sound: -2 }, unlock: { kind: "theme", name: "战争", role: "总监", level: 2 } },
+  { id: "production", name: "舞台统筹", note: "强化视听表现，牺牲程序练习", cost: 1100, energy: 35, officeLevel: 2, requiredRole: "制作人", gains: { art: 5, sound: 5, code: -2 }, unlock: { kind: "theme", name: "演艺", role: "制作人", level: 2 } },
+  { id: "hardware", name: "电路实验", note: "深入硬件设计，牺牲叙事练习", cost: 1600, energy: 40, officeLevel: 3, requiredRole: "硬件工程师", gains: { code: 8, art: 4, scenario: -3 }, unlock: { kind: "theme", name: "机械", role: "硬件工程师", level: 2 } },
+  { id: "simulation", name: "虚拟世界实验", note: "探索虚拟叙事，牺牲音乐练习", cost: 1800, energy: 40, officeLevel: 3, requiredRole: "黑客", gains: { code: 6, scenario: 6, sound: -3 }, unlock: { kind: "theme", name: "虚拟世界", role: "黑客", level: 2 } },
 ];
 
 export const CONSOLE_CPUS = [
@@ -225,4 +236,6 @@ export const ROLE_UNLOCK_RULES = [
   { role: "音效师", level: 3, name: "竞速" },
   { role: "总监", level: 5, name: "音乐" },
   { role: "制作人", level: 3, name: "格斗" },
+  { role: "总监", level: 3, name: "策略" },
+  { role: "制作人", level: 5, name: "经营" },
 ];

@@ -228,7 +228,7 @@ test("marketing, items and career changes preserve their edge rules", () => {
   state = applyGameAction(state, { type: "use-item", key: "funBoost" }, () => .5).state;
   assert.ok(firstGain > state.project.fun - secondFun);
 
-  state = { ...state, careerManuals: 1 };
+  state = { ...state, careerManuals: 1, staff: state.staff.map(member => member.id === 1 ? { ...member, level: 5, masteredRoles: ["总监", "制作人"] } : member) };
   const result = applyGameAction(
     state,
     { type: "change-career", staffId: 1, role: "硬件工程师" },

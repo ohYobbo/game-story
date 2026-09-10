@@ -12,7 +12,7 @@ export type BalanceStaff = {
   salary?: number;
 };
 
-export const BALANCE_VERSION = 4;
+export const BALANCE_VERSION = 5;
 export const STARTING_CASH = 500;
 export const STARTING_FANS = 0;
 export const STARTING_RESEARCH = 10;
@@ -62,6 +62,12 @@ export const CONTENT_BALANCE: Record<string, { cost: number; popularity: number 
   "海盗": { cost: 15, popularity: 1 },
   "动物": { cost: 15, popularity: 1.05 },
   "电子宠物": { cost: 15, popularity: 1.05 },
+  "策略": { cost: 35, popularity: 1 },
+  "经营": { cost: 35, popularity: 1 },
+  "战争": { cost: 20, popularity: .95 },
+  "演艺": { cost: 20, popularity: 1 },
+  "机械": { cost: 20, popularity: .95 },
+  "虚拟世界": { cost: 25, popularity: 1.05 },
 };
 
 export function getContentBalance(name: string) {
@@ -206,12 +212,14 @@ export function getAnnualPayroll(staff: BalanceStaff[]) {
   return staff.reduce((sum, member) => sum + (member.salary ?? 20), 0);
 }
 
+export const CAREER_REQUIREMENTS: Record<string, string[]> = {
+  "程序员": [], "编剧": [], "美术": [], "音效师": [],
+  "总监": ["程序员", "编剧"], "制作人": ["美术", "音效师"],
+  "硬件工程师": ["总监", "制作人"], "黑客": ["硬件工程师"],
+};
+
 export function getCareerOptionsFor(masteredRoles: string[], currentRole: string) {
-  const mastered = new Set(masteredRoles);
-  const options = ["程序员", "编剧", "美术", "音效师"];
-  if (mastered.has("程序员") && mastered.has("编剧")) options.push("总监");
-  if (mastered.has("美术") && mastered.has("音效师")) options.push("制作人");
-  if (mastered.has("总监") && mastered.has("制作人")) options.push("硬件工程师");
-  if (mastered.has("硬件工程师")) options.push("黑客");
-  return options.filter((role) => role !== currentRole);
+  return Object.entries(CAREER_REQUIREMENTS)
+    .filter(([role, required]) => role !== currentRole && required.every(item => masteredRoles.includes(item)))
+    .map(([role]) => role);
 }

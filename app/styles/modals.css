@@ -325,6 +325,14 @@
 .training-discovery.is-ready { color: #a2362d !important; }
 
 .training-list button { min-height: 76px; }
+.training-hero span, .training-list button > span:nth-child(2), .career-options button { min-width: 0; overflow-wrap: anywhere; }
+.training-hero small { line-height: 1.6; }
+.career-options button { text-align: left; }
+.career-options button:disabled { cursor: not-allowed; }
+.office-unlocks { margin: 12px 0; padding: 10px; color: #554b38; background: #f4ecd7; font-size: 10px; line-height: 1.6; }
+.office-unlocks summary { cursor: pointer; font-weight: bold; }
+.office-unlocks div { margin-top: 10px; }
+.office-unlocks p { margin: 3px 0; }
 .training-list button:disabled,
 .lead-grid button:disabled,
 .marketing-list button:disabled,

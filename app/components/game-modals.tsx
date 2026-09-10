@@ -2,7 +2,8 @@
 
 import type { Dispatch, SetStateAction } from "react";
 
-import { OFFICE_UPGRADE_COSTS, getLevelUpCost } from "../game-balance";
+import { CAREER_REQUIREMENTS, OFFICE_UPGRADE_COSTS, getCareerOptionsFor, getLevelUpCost } from "../game-balance";
+import { getOfficeUnlocks } from "../game/progression";
 import { COMBINATION_RULES } from "../game/combinations";
 import {
   ADVERTISING_METHODS,
@@ -15,6 +16,7 @@ import {
   DIRECTIONS,
   EVENT_ICON_INDEX,
   HIRING_METHODS,
+  ROLE_UNLOCK_RULES,
   SHOP_ITEMS,
   STAGE_INFO,
   STAGE_ORDER,
@@ -117,7 +119,6 @@ type GameModalsProps = {
   openCareer: (id: number) => void;
   expandOffice: () => void;
   runTraining: (method: (typeof TRAINING_METHODS)[number]) => void;
-  getCareerOptions: (member: Staff) => string[];
   changeCareer: (role: string) => void;
   buyCareerManual: () => void;
   buyShopItem: (item: (typeof SHOP_ITEMS)[number]) => void;
@@ -190,7 +191,6 @@ export function GameModals({
   openCareer,
   expandOffice,
   runTraining,
-  getCareerOptions,
   changeCareer,
   buyCareerManual,
   buyShopItem,
@@ -449,15 +449,19 @@ export function GameModals({
               {staff.map((member) => (
                 <article key={member.id}>
                   <StaffAvatar staff={member} className="mini-avatar" />
-                  <div className="staff-info"><b>{member.name}<em>Lv.{member.level}</em></b><small>{member.role} · 年薪 {formatCash(member.salary)} · Power {member.maxPower} · 体力 {Math.round(member.energy)}%</small><div><span>程 {member.code}</span><span>剧 {member.scenario}</span><span>画 {member.art}</span><span>音 {member.sound}</span></div></div>
+                  <div className="staff-info"><b>{member.name}<em>Lv.{member.level}</em></b><small>{member.role} · 年薪 {formatCash(member.salary)} · Power {member.maxPower} · 体力 {Math.round(member.energy)}%</small><small>已精通：{member.masteredRoles?.join("、") || "暂无"}</small><div><span>程 {member.code}</span><span>剧 {member.scenario}</span><span>画 {member.art}</span><span>音 {member.sound}</span></div></div>
                   <div className="staff-actions">
                     <button onClick={() => levelUp(member.id)}>升级<small>◆{getLevelUpCost(member.level)}</small></button>
                     <button onClick={() => openTraining(member.id)}>培训<small>现金</small></button>
-                    <button onClick={() => openCareer(member.id)}>转职<small>手册</small></button>
+                    <button onClick={() => openCareer(member.id)}>职业<small>路径 / 转职</small></button>
                   </div>
                 </article>
               ))}
             </div>
+            <details className="office-unlocks">
+              <summary>办公室能力 · 当前第 {companyLevel} 阶段</summary>
+              {[1, 2, 3].map(level => <div key={level}><b>第 {level} 阶段 · {level <= companyLevel ? "已开放" : "待扩建"}</b>{getOfficeUnlocks(level).map(line => <p key={line}>{line}</p>)}</div>)}
+            </details>
             {companyLevel < 3 && (
               <button className="expand-button" onClick={expandOffice}>
                 {companyLevel === 1
@@ -472,19 +476,21 @@ export function GameModals({
           <ModalShell title={`培训 · ${selectedStaff.name}`} onClose={() => setModal("staff")}>
             <div className="training-hero">
               <StaffAvatar staff={selectedStaff} className="mini-avatar" />
-              <span><b>{selectedStaff.role} Lv.{selectedStaff.level}</b><small>体力 {Math.round(selectedStaff.energy)}% · 重复训练效果会逐渐降低</small></span>
+              <span><b>{selectedStaff.role} Lv.{selectedStaff.level}</b><small>体力 {Math.round(selectedStaff.energy)}% · 正向收益重复衰减，12% 概率超级培训；负向代价固定，属性最低为 0</small></span>
             </div>
             <div className="training-list">
               {TRAINING_METHODS.map((method) => {
-                const prediction = predictTraining(selectedStaff, method, unlockedThemes);
+                const prediction = predictTraining(selectedStaff, method, unlockedThemes, companyLevel, cash);
                 const statLabels = { code: "程序", scenario: "剧本", art: "画面", sound: "音乐" };
+                const signed = (value: number) => `${value >= 0 ? "+" : ""}${value}`;
                 return (
-                  <button key={method.id} onClick={() => runTraining(method)} disabled={cash < method.cost || selectedStaff.energy < method.energy}>
+                  <button key={method.id} onClick={() => runTraining(method)} disabled={!!prediction.blockedReason}>
                     <UiIcon index={18} className="training-icon" />
                     <span>
                       <b>{method.name}</b>
                       <small>{method.note} · 体力 -{method.energy} · 已训练 {prediction.used} 次 · 效果 {Math.round(prediction.multiplier * 100)}%</small>
-                      <small>基础提升 {prediction.gains.map((gain) => `${statLabels[gain.key]} +${gain.min}`).join(" · ")} · 超级培训最高 {prediction.gains.map((gain) => `${statLabels[gain.key]} +${gain.max}`).join(" · ")}</small>
+                      <small>普通培训 {prediction.gains.map((gain) => `${statLabels[gain.key]} ${signed(gain.min)}`).join(" · ")} · 超级培训 {prediction.gains.map((gain) => `${statLabels[gain.key]} ${signed(gain.max)}`).join(" · ")}</small>
+                      {prediction.blockedReason && <small>{prediction.blockedReason}</small>}
                       <small className={prediction.willDiscover ? "training-discovery is-ready" : "training-discovery"}>{prediction.willDiscover ? `本次可发现“${method.unlock.name}”` : prediction.discovery}</small>
                     </span>
                     <strong>{formatCash(method.cost)}</strong>
@@ -496,16 +502,26 @@ export function GameModals({
         )}
 
         {modal === "career" && selectedStaff && (
-          <ModalShell title={`转职 · ${selectedStaff.name}`} onClose={() => setModal("staff")}>
+          <ModalShell title={`职业路径 · ${selectedStaff.name}`} onClose={() => setModal("staff")}>
             <div className="career-sheet">
               <div className="career-current">
                 <StaffAvatar staff={selectedStaff} className="mini-avatar" />
                 <span><b>{selectedStaff.role} Lv.{selectedStaff.level}</b><small>已精通：{selectedStaff.masteredRoles?.join("、") || "暂无"}</small></span>
                 <em>手册 {careerManuals}</em>
               </div>
-              <p>转职后新职业从 Lv.1 开始，原有能力保留。精通总监与制作人可解锁硬件工程师。</p>
+              <p>当前职业达到 Lv.5、满足精通前置并消耗 1 本手册才能转职。转职后从 Lv.1 开始，原有能力与内容保留。专属培训要求当前职业匹配。</p>
               <div className="career-options">
-                {getCareerOptions(selectedStaff).map((role) => <button key={role} onClick={() => changeCareer(role)}><b>{role}</b><small>消耗 1 本手册</small></button>)}
+                {Object.entries(CAREER_REQUIREMENTS).map(([role, required]) => {
+                  const available = getCareerOptionsFor(selectedStaff.masteredRoles ?? [], selectedStaff.role).includes(role);
+                  return <button key={role} onClick={() => changeCareer(role)} disabled={!available || selectedStaff.level < 5 || careerManuals < 1}>
+                    <b>{role}{role === selectedStaff.role ? " · 当前" : ""}</b>
+                    <small>{required.length ? `前置精通：${required.map(item => `${item}${selectedStaff.masteredRoles?.includes(item) ? " ✓" : "（未精通）"}`).join("、")}` : "无额外精通前置"}</small>
+                    {ROLE_UNLOCK_RULES.filter(rule => rule.role === role).map(rule => <small key={rule.name}>Lv.{rule.level} 解锁类型“{rule.name}”{unlockedGenres.includes(rule.name) ? " · 已解锁" : ""}</small>)}
+                    {TRAINING_METHODS.filter(method => method.unlock.role === role).map(method => <small key={method.id}>{method.name}：Lv.{method.unlock.level} 发现“{method.unlock.name}” · 办公室 {method.officeLevel ?? 1}{method.requiredRole ? " · 专属培训" : ""}{unlockedThemes.includes(method.unlock.name) ? " · 已发现" : ""}</small>)}
+                    {role === "硬件工程师" && <small>在岗能力：开启自研主机；实验零件仍需满足工程师人数</small>}
+                    <small>{role === selectedStaff.role ? "当前职业" : !available ? "尚未满足职业前置" : selectedStaff.level < 5 ? "当前职业需达到 Lv.5" : careerManuals < 1 ? "缺少转职手册" : "可转职 · 消耗 1 本手册"}</small>
+                  </button>;
+                })}
               </div>
             </div>
           </ModalShell>

@@ -249,22 +249,31 @@ export function predictTraining(
   member: Staff,
   method: (typeof TRAINING_METHODS)[number],
   unlockedThemes: string[],
+  companyLevel = 1,
+  cash = Infinity,
 ) {
   const used = member.training?.[method.id] ?? 0;
   const multiplier = getRepeatedUseMultiplier(used, .18, .2);
-  const gains = Object.entries(method.gains).map(([key, value]) => ({
-    key: key as keyof Pick<Staff, "code" | "scenario" | "art" | "sound">,
-    min: Math.max(0, Math.round((value ?? 0) * multiplier)),
-    max: Math.max(0, Math.round((value ?? 0) * multiplier * 3)),
-  }));
+  const gains = Object.entries(method.gains).map(([key, value]) => {
+    const stat = key as keyof Pick<Staff, "code" | "scenario" | "art" | "sound">;
+    // Penalties stay fixed; only positive gains decay or receive the super-training bonus.
+    const delta = (bonus: number) => value < 0 ? 0 - Math.min(member[stat], -value) : Math.round(value * multiplier * bonus);
+    return { key: stat, min: delta(1), max: delta(3) };
+  });
+  const blockedReason = companyLevel < (method.officeLevel ?? 1)
+    ? `第 ${method.officeLevel} 阶段办公室解锁`
+    : method.requiredRole && member.role !== method.requiredRole ? `仅限当前职业为${method.requiredRole}`
+      : cash < method.cost ? "培训资金不足"
+        : member.energy < method.energy ? "体力不足，先让员工休息" : null;
   const canUnlock = member.role === method.unlock.role && member.level >= method.unlock.level;
   return {
     used,
     multiplier,
     gains,
+    blockedReason,
     canUnlock,
-    willDiscover: canUnlock && !unlockedThemes.includes(method.unlock.name),
-    discovery: `${method.unlock.role} Lv.${method.unlock.level} 可发现“${method.unlock.name}”`,
+    willDiscover: !blockedReason && canUnlock && !unlockedThemes.includes(method.unlock.name),
+    discovery: unlockedThemes.includes(method.unlock.name) ? `已发现“${method.unlock.name}”` : `${method.unlock.role} Lv.${method.unlock.level} 可发现“${method.unlock.name}”`,
   };
 }
 

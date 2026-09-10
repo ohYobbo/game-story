@@ -2,6 +2,7 @@ import {
   DEBUG_RESEARCH_PER_BUG,
   HALL_OF_FAME_SCORE,
   getAnnualPayroll,
+  getCareerOptionsFor,
   getConsoleInitialUsers,
   getContentPopularity,
   getDebugGain,
@@ -1160,43 +1161,17 @@ function trainStaff(
 ): EngineResult {
   const member = state.staff.find((item) => item.id === action.staffId);
   if (!member) return noEffects(state);
-  const method = action.method;
-  if (state.cash < method.cost) {
-    return { state, effects: [{ type: "toast", message: "培训资金不足" }] };
-  }
-  if (member.energy < method.energy) {
-    return {
-      state,
-      effects: [{ type: "toast", message: "体力不足，先让员工休息" }],
-    };
-  }
-  const prediction = predictTraining(member, method, state.unlockedThemes);
+  const method = TRAINING_METHODS.find(item => item.id === action.method.id);
+  if (!method) return noEffects(state);
+  const prediction = predictTraining(member, method, state.unlockedThemes, state.companyLevel, state.cash);
+  if (prediction.blockedReason) return { state, effects: [{ type: "toast", message: prediction.blockedReason }] };
   const used = prediction.used;
   const superTraining = random() < .12;
-  const multiplier = prediction.multiplier * (superTraining ? 3 : 1);
   const canUnlock = prediction.canUnlock;
   const unlocked = prediction.willDiscover;
-  const staff = state.staff.map((item) =>
-    item.id === member.id
-      ? {
-          ...item,
-          code:
-            item.code +
-            Math.max(0, Math.round((method.gains.code ?? 0) * multiplier)),
-          scenario:
-            item.scenario +
-            Math.max(0, Math.round((method.gains.scenario ?? 0) * multiplier)),
-          art:
-            item.art +
-            Math.max(0, Math.round((method.gains.art ?? 0) * multiplier)),
-          sound:
-            item.sound +
-            Math.max(0, Math.round((method.gains.sound ?? 0) * multiplier)),
-          energy: clamp(item.energy - method.energy, 0, 100),
-          training: { ...(item.training ?? {}), [method.id]: used + 1 },
-        }
-      : item,
-  );
+  const trained = { ...member, energy: member.energy - method.energy, training: { ...(member.training ?? {}), [method.id]: used + 1 } };
+  for (const gain of prediction.gains) trained[gain.key] += superTraining ? gain.max : gain.min;
+  const staff = state.staff.map(item => item.id === member.id ? trained : item);
   const message = unlocked
     ? `培训成功，发现新题材“${method.unlock.name}”！`
     : superTraining
@@ -1223,10 +1198,10 @@ function trainStaff(
         entries: [
           { category: "resource", label: "资金", value: `-${formatCash(method.cost)}`, tone: "negative" },
           { category: "resource", label: "体力", value: `-${method.energy}`, tone: "negative" },
-          ...Object.entries(method.gains).map(([key, value]) => {
+          ...prediction.gains.map((change) => {
             const labels = { code: "程序", scenario: "剧本", art: "画面", sound: "音乐" };
-            const gain = Math.max(0, Math.round((value ?? 0) * multiplier));
-            return { category: "quality" as const, label: labels[key as keyof typeof labels], value: `+${gain}`, tone: gain > 0 ? "positive" as const : "neutral" as const, detail: gain > 0 ? undefined : "重复训练后未提升" };
+            const gain = superTraining ? change.max : change.min;
+            return { category: "quality" as const, label: labels[change.key], value: `${gain >= 0 ? "+" : ""}${gain}`, tone: gain > 0 ? "positive" as const : gain < 0 ? "negative" as const : "neutral" as const, detail: gain === 0 ? "实际属性无变化" : undefined };
           }),
           ...(unlocked ? [{ category: "quality" as const, label: "发现题材", value: method.unlock.name, tone: "positive" as const }] : []),
           { category: "risk", label: "重复衰减", value: used > 0 ? `${Math.round((1 - prediction.multiplier) * 100)}%` : "未触发", tone: used > 0 ? "negative" : "neutral" },
@@ -1377,6 +1352,7 @@ function changeCareer(
 ): EngineResult {
   const member = state.staff.find((item) => item.id === staffId);
   if (!member || state.careerManuals < 1) return noEffects(state);
+  if (member.level < 5 || !getCareerOptionsFor(member.masteredRoles ?? [], member.role).includes(role)) return noEffects(state);
   return {
     state: {
       ...state,

@@ -13,7 +13,7 @@ const restore = state => parseSave(JSON.stringify(serializeGameState(state)));
 
 test("all existing content is reachable through initial, career or actual training unlock paths", () => {
   const genres = [...GENRES, ...ROLE_UNLOCK_RULES.map(rule => rule.name)];
-  let state = { ...createInitialGameState(), cash: 100000 };
+  let state = { ...createInitialGameState(), cash: 100000, companyLevel: 3 };
   for (const method of TRAINING_METHODS) {
     const member = { ...state.staff[0], role: method.unlock.role, level: method.unlock.level, energy: 100 };
     state = applyGameAction({ ...state, staff: [member] }, { type: "train-staff", staffId: member.id, method }, () => .5).state;

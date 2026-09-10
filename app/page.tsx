@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { getCareerOptionsFor } from "./game-balance";
 import { GameDashboard } from "./components/game-dashboard";
 import { GameModals } from "./components/game-modals";
 import {
@@ -478,12 +477,14 @@ export default function Home() {
 
   const runTraining = (method: (typeof TRAINING_METHODS)[number]) => {
     if (selectedStaffId === null) return;
+    const before = gameRef.current;
     const result = dispatchGame({
       type: "train-staff",
       staffId: selectedStaffId,
       method,
     });
     applyEngineEffects(result.effects);
+    if (result.state !== before) persistGame();
   };
 
   const buyCareerManual = () => {
@@ -516,15 +517,9 @@ export default function Home() {
     applyEngineEffects(result.effects);
   };
 
-  const getCareerOptions = (member: Staff) => {
-    return getCareerOptionsFor(member.masteredRoles ?? [], member.role);
-  };
-
   const openCareer = (id: number) => {
     const member = staff.find((item) => item.id === id);
     if (!member) return;
-    if (member.level < 5) return announce("当前职业达到 Lv.5 后才能转职");
-    if (careerManuals < 1) return announce("需要 1 本转职手册");
     setSelectedStaffId(id);
     setModal("career");
   };
@@ -535,6 +530,7 @@ export default function Home() {
     const result = dispatchGame({ type: "change-career", staffId: member.id, role });
     applyEngineEffects(result.effects);
     if (result.state.careerManuals === careerManuals) return;
+    persistGame();
     setModal("staff");
   };
 
@@ -649,7 +645,6 @@ export default function Home() {
           openCareer={openCareer}
           expandOffice={expandOffice}
           runTraining={runTraining}
-          getCareerOptions={getCareerOptions}
           changeCareer={changeCareer}
           buyCareerManual={buyCareerManual}
           buyShopItem={buyShopItem}

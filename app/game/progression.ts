@@ -1,5 +1,5 @@
 import { OFFICE_UPGRADE_COSTS, getLevelUpCost, getNextSalary } from "../game-balance.ts";
-import { ROLE_LEVEL_BOOSTS, ROLE_UNLOCK_RULES } from "./data.ts";
+import { ADVERTISING_METHODS, CONTRACTS, HIRING_METHODS, ROLE_LEVEL_BOOSTS, ROLE_UNLOCK_RULES, TRAINING_METHODS } from "./data.ts";
 import { formatCash, getOfficeCapacity } from "./rules.ts";
 import type { GameState } from "./types";
 import type { EngineResult } from "./engine";
@@ -11,6 +11,15 @@ export type ProgressionAction =
 const unchanged = (state: GameState, message?: string): EngineResult => ({
   state, effects: message ? [{ type: "toast", message }] : [],
 });
+
+export function getOfficeUnlocks(level: number) {
+  return [
+    `培训：${TRAINING_METHODS.filter(item => (item.officeLevel ?? 1) === level).map(item => item.name).join("、")}`,
+    `招聘：${HIRING_METHODS.filter(item => (item.level ?? 1) === level).map(item => item.name).join("、")}`,
+    `宣传：${ADVERTISING_METHODS.filter(item => item.level === level).map(item => item.name).join("、")}`,
+    `外包：${CONTRACTS.filter(item => item.level === level).map(item => item.name).join("、")}`,
+  ];
+}
 
 export function levelUpStaff(state: GameState, action: Extract<ProgressionAction, { type: "level-up-staff" }>): EngineResult {
   const member = state.staff.find(item => item.id === action.staffId);
@@ -61,7 +70,7 @@ export function expandOffice(state: GameState, action: Extract<ProgressionAction
     effects: [{ type: "event", event: {
       kind: "office", title: "办公室搬迁",
       headline: nextLevel === 2 ? "更宽敞的新办公室启用！" : "梦想中的游戏大楼落成！",
-      body: nextLevel === 2 ? "团队拥有了更多工位，也解锁了更高级的招聘与培训方式。" : "八个工位、专用会议区与硬件实验室全部就绪，工作室正式迈入顶级开发商行列。",
+      body: `${getOfficeUnlocks(nextLevel).join("；")}。专属培训仍需对应职业。`,
       reward: `员工上限提升至 ${getOfficeCapacity(nextLevel)} 人`,
     } }],
   };
