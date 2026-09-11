@@ -220,6 +220,7 @@ export default function Home() {
         setModal("challenge");
       }
       if (effect.type === "event") {
+        if (effect.event.kind === "awards" || effect.event.kind === "ending") persistGame();
         setEventData(effect.event);
         setModal("event");
       }

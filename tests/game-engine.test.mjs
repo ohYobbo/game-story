@@ -174,18 +174,19 @@ test("scheduled events cover payroll, expo, awards and the twenty-year ending", 
   result = applyGameAction(
     {
       ...initial,
-      month: 12,
+      year: 2,
+      month: 1,
       week: 1,
-      releases: [{ name: "大奖作", score: 40, sales: 1, income: 1, weeks: 1, releasedYear: 1 }],
+      releases: [{ id: "release-1", name: "大奖作", score: 40, sales: 100000, income: 750, weeks: 1, releasedYear: 1, finalQuality: { fun: 70, creativity: 70, graphics: 70, sound: 70, bugs: 0 } }],
     },
     { type: "scheduled-event" },
     () => 0,
   );
-  assert.equal(result.state.awards, 1);
-  assert.equal(result.state.cash, 2500);
+  assert.equal(result.state.awards, 3);
+  assert.equal(result.state.cash, 3500);
 
   result = applyGameAction(
-    { ...initial, year: 20 },
+    { ...initial, year: 20, lastAwardYear: 19 },
     { type: "scheduled-event" },
     () => 0,
   );

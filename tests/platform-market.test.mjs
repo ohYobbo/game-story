@@ -7,7 +7,7 @@ import { createGameProject, predictGamePlan, predictEarlyRelease } from "../app/
 import { advanceCalendar, createInitialGameState, getAvailablePlatforms } from "../app/game/rules.ts";
 import { migrateSave, parseSave, serializeGameState } from "../app/game/save.ts";
 
-const initial = (overrides = {}) => ({ ...createInitialGameState(), cash: 10000, ...overrides });
+const initial = (overrides = {}) => ({ ...createInitialGameState(), cash: 10000, lastAwardYear: (overrides.year ?? 1) - 1, ...overrides });
 const market = (state, name = "豆豆机") => getPlatformMarkets(state).find(p => p.name === name);
 const input = (state, name = "个人电脑", direction = "均衡") => ({
   state, name: "平台验收", platform: market(state, name), genre: "桌游", theme: "海盗",
@@ -82,7 +82,9 @@ test("calendar crosses exact launch and retirement boundaries", () => {
   assert.equal(market(retired).users, 0);
   assert.equal(start(retired, lastProject).state, retired);
   assert.ok(!getAvailablePlatforms(6, false, 0).some(p => p.name === "豆豆机"));
-  assert.equal(applyGameAction(launch, { type: "scheduled-event" }).effects[0].event.headline, "新主机“迷你掌机”上市！");
+  const ceremony = applyGameAction(launch, { type: "scheduled-event" });
+  assert.equal(ceremony.effects[0].event.kind, "awards");
+  assert.equal(applyGameAction(ceremony.state, { type: "scheduled-event" }).effects[0].event.headline, "新主机“迷你掌机”上市！");
 });
 
 test("launch, growth, maturity and decline change market size and prices", () => {

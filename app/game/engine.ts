@@ -13,12 +13,14 @@ import {
   getGeneralQualityGain,
   getQualityGain,
   getReleaseFatigueMultiplier,
-  getReviewScores,
+  getReviewDetails,
   getSalesIncome,
   getStageTeamPower,
 } from "../game-balance.ts";
 import { combinationKey, COMBINATION_RULES } from "./combinations.ts";
 import { getPlatformMarkets, getPlatformQuote } from "./platforms.ts";
+import { settleAnnualAwards } from "./awards.ts";
+import { createEndingReport } from "./ending.ts";
 import { expandOffice, levelUpStaff, type ProgressionAction } from "./progression.ts";
 import {
   DEFAULT_DIRECTION_POINTS,
@@ -207,13 +209,14 @@ function completeProject(
 
   const combination = finished.combination ?? (GREAT_COMBOS.has(`${finished.genre}|${finished.theme}`) ? "great" : "normal");
   const isGreatCombo = combination === "great";
-  const scores = getReviewScores({
+  const reviewDetails = getReviewDetails({
     qualities: finished,
     isGreatCombo,
     reputation: state.reputation,
     bugs: finished.bugs,
     randomValues: [random(), random(), random(), random()],
   });
+  const scores = reviewDetails.map(item => item.score);
   const totalScore = scores.reduce((sum, score) => sum + score, 0);
   const sales = getFirstWeekSales({
     score: totalScore,
@@ -294,6 +297,7 @@ function completeProject(
       sequelOfId: finished.sequelOfId,
       finalQuality: { fun: finished.fun, creativity: finished.creativity, graphics: finished.graphics, sound: finished.sound, bugs: finished.bugs },
       combo: combination,
+      reviewDetails,
     },
     ...prior,
   ];
@@ -338,6 +342,7 @@ function completeProject(
       review: {
         name: finished.name,
         scores,
+        details: reviewDetails,
         sales,
         income,
         audience: audience.label,
@@ -919,26 +924,19 @@ function tick(
 
 export function applyScheduledEvent(
   state: GameState,
-  random: RandomSource,
 ): EngineResult {
+  if (state.lastAwardYear < state.year - 1) return settleAnnualAwards(state, state.year - 1);
   const eventKey = `${state.year}-${state.month}-${state.week}`;
-  if (state.lastEventKey === eventKey) return noEffects(state);
 
   if (state.year >= 20 && !state.endingShown) {
-    const bestSeller = [...state.releases].sort((a, b) => b.sales - a.sales)[0];
-    const bestProfit = state.releases.filter(item => item.developmentCost !== undefined).sort(
-      (a, b) =>
-        b.income -
-        (b.developmentCost ?? 0) -
-        (a.income - (a.developmentCost ?? 0)),
-    )[0];
-    const score = Math.round(state.cash);
+    const report = state.endingReport ?? createEndingReport(state);
+    const score = report.cash;
     return {
       state: {
         ...state,
         endingScore: score,
         endingShown: true,
-        lastEventKey: eventKey,
+        endingReport: report,
       },
       effects: [{
         type: "event",
@@ -951,12 +949,13 @@ export function applyScheduledEvent(
               : score >= 5_000
                 ? "跻身一流开发商！"
                 : "故事仍会继续",
-          body: `二十年资产 ${formatCash(score)}。最高销量作品《${bestSeller?.name ?? "尚无作品"}》售出 ${(bestSeller?.sales ?? 0).toLocaleString()} 套；${bestProfit ? `作品收益最高《${bestProfit.name}》为 ${Math.round(bestProfit.income - bestProfit.developmentCost!).toLocaleString()} 千` : "作品收益未知（无开发费记录）"}。作品收益仅扣立项开发费，不含薪资、广告及挑战投入。${state.releaseHistoryIncomplete ? "旧记录不完整，仅统计已保留作品。" : ""}结算后仍可继续经营。`,
-          reward: `20 年资产记录 ${formatCash(score)}`,
+          body: "经营成绩已保存。继续经营后，可在公司资料中重看这份固定报告。",
         },
       }],
     };
   }
+
+  if (state.lastEventKey === eventKey) return noEffects(state);
 
   if (state.month === 3 && state.week === 1) {
     const payroll = getAnnualPayroll(state.staff);
@@ -1035,68 +1034,6 @@ export function applyScheduledEvent(
         kind: "market", title: "平台退市预告", headline: `${retiring.map(p => p.name).join("、")}将在本年末退市`,
         body: "还有 12 周可开新作。平台费用已下调，活跃用户持续收缩；已开工项目可继续完成并发售，沿用开工时锁定的用户量。",
       } }],
-    };
-  }
-
-  if (state.month === 12 && state.week === 1) {
-    const candidates = state.releases.filter(
-      (item) => item.releasedYear === state.year,
-    );
-    const best = [...candidates].sort((a, b) => b.score - a.score)[0];
-    const awardsUnlocked = state.releases.some(
-      (item) => item.score >= HALL_OF_FAME_SCORE,
-    );
-    let headline = awardsUnlocked ? "今年没有作品获奖" : "工作室尚未取得参评资格";
-    let body = awardsUnlocked
-      ? "来年继续磨练团队，冲击游戏行业的最高荣誉吧。"
-      : "先让一款作品进入名人堂，全球游戏大奖才会向工作室发出邀请。";
-    let reward = "无奖金";
-    let prize = 0;
-    let newFans = 0;
-    let newAwards = 0;
-    const gotyChance =
-      best && best.score >= 36
-        ? Math.min(.82, .18 + (best.score - 36) * .16)
-        : 0;
-    if (awardsUnlocked && best && best.score >= 36 && random() < gotyChance) {
-      headline = `《${best.name}》荣获年度最佳！`;
-      body = "全场评审起立鼓掌，工作室的名字响彻整个游戏行业。";
-      reward = "奖金 ¥2,000千 · 粉丝 +1,200";
-      prize = 2000;
-      newFans = 1200;
-      newAwards = 1;
-    } else if (awardsUnlocked && best && best.score >= HALL_OF_FAME_SCORE) {
-      headline = `《${best.name}》荣获优秀设计奖！`;
-      body = "独到的创意与完成度得到了评审们的一致肯定。";
-      reward = "奖金 ¥500千 · 粉丝 +300";
-      prize = 500;
-      newFans = 300;
-      newAwards = 1;
-    } else if (awardsUnlocked && best && best.score >= 28) {
-      headline = `《${best.name}》获得评审特别奖`;
-      body = "虽然与大奖擦肩而过，但作品已经给玩家留下了深刻印象。";
-      reward = "奖金 ¥200千 · 粉丝 +120";
-      prize = 200;
-      newFans = 120;
-    }
-    return {
-      state: {
-        ...state,
-        cash: state.cash + prize,
-        fans: state.fans + newFans,
-        awards: state.awards + newAwards,
-        lastEventKey: eventKey,
-      },
-      effects: [{
-        type: "event",
-        event: {
-          kind: "awards",
-          title: "全球游戏大奖",
-          headline,
-          body,
-          reward,
-        },
-      }],
     };
   }
 
@@ -1560,7 +1497,7 @@ export function applyGameAction(
     case "tick":
       return tick(state, action.isNewWeek, action.allowStaffChallenge ?? false, random);
     case "scheduled-event":
-      return applyScheduledEvent(state, random);
+      return applyScheduledEvent(state);
     case "level-up-staff":
       return levelUpStaff(state, action);
     case "expand-office":

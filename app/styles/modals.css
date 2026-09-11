@@ -449,6 +449,17 @@
 .release-table > div { border-bottom: 2px solid #8d6a43; }
 .release-table em { color: #b44024; }
 
+.award-records, .review-reasons { margin: 12px 0; color: #514733; font-size: 11px; line-height: 1.6; overflow-wrap: anywhere; }
+.award-records h3 { color: var(--navy); font-size: 14px; }
+.award-records summary, .review-reasons summary { cursor: pointer; font-weight: 700; color: var(--navy); }
+.award-year, .award-rules, .review-reasons { padding: 10px; border: 2px solid #8d6a43; background: #fff0c3; }
+.award-year { margin-top: 10px; }
+.award-category, .review-reasons > div { padding: 8px 0; border-top: 1px solid #bca276; }
+.review-reasons b, .review-reasons span { display: block; }
+.release-table > div > .review-reasons, .release-table > div > .review-unknown { grid-column: 1 / -1; }
+.release-table .review-reasons p { padding: 0; text-align: left; font-size: 11px; }
+.event-awards h2 { font-size: 17px; line-height: 1.6; overflow-wrap: anywhere; }
+
 .review-scores div {
   border: 3px solid var(--pixel-line);
   border-radius: 2px;
@@ -587,3 +598,9 @@ select:focus-visible {
 .recovery-notice p { margin: 0 0 8px; font-size: 13px; line-height: 1.5; }
 .recovery-notice p:last-child { margin-bottom: 0; }
 .combo-note small { display: block; margin-top: 4px; color: inherit; font-size: 12px; font-weight: normal; }
+
+.ending-report { margin: 14px 0; padding: 12px; border: 2px solid #bd984f; background: #fff8e6; text-align: left; overflow-wrap: anywhere; }
+.ending-report h3, .ending-report h4 { margin: 10px 0; color: var(--navy); }
+.ending-report p { margin: 8px 0; font-size: 12px; line-height: 1.6; }
+.ending-report .record-stats { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
+.ending-report .record-stats b { font-size: 15px; }

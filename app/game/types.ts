@@ -1,4 +1,4 @@
-import type { ProductionStage } from "../game-balance";
+import type { ProductionStage, ReviewDetail } from "../game-balance";
 import type { CombinationDiscovery, CombinationRating } from "./combinations";
 
 export type Staff = {
@@ -180,6 +180,26 @@ export type Release = {
   sequelOfId?: string;
   finalQuality?: Pick<Project, "fun" | "creativity" | "graphics" | "sound" | "bugs">;
   combo?: CombinationRating;
+  reviewDetails?: ReviewDetail[];
+};
+
+export type AwardCategory = "design" | "music" | "worst" | "runnerUp" | "grand";
+export type AwardNominee = {
+  releaseId: string;
+  name: string;
+  metric: number;
+  score: number;
+  sales: number;
+  quality: NonNullable<Release["finalQuality"]>;
+};
+export type AnnualAwards = {
+  year: number;
+  qualified: boolean;
+  categories: { category: AwardCategory; nominees: AwardNominee[]; winnerId?: string }[];
+  excluded: { name: string; releaseId: string; reason: string }[];
+  unknownYearCount: number;
+  rewards: { cash: number; fans: number; reputation: number; awards: number };
+  officeUnlocked: boolean;
 };
 
 export type Inventory = {
@@ -189,6 +209,28 @@ export type Inventory = {
   soundBoost: number;
   bugSpray: number;
   energyDrink: number;
+};
+
+export type EndingReport = {
+  settledAt: { year: number; month: number; week: number } | null;
+  cash: number;
+  // Null for legacy endings: current business data cannot reconstruct past results.
+  performance: {
+    releaseCount: number;
+    totalSales: number;
+    averageScore: number | null;
+    bestSeller: { id: string; name: string; sales: number } | null;
+    bestProfit: { id: string; name: string; profit: number } | null;
+    unknownCostCount: number;
+    releaseHistoryIncomplete: boolean;
+    awards: number;
+    awardCounts: Record<AwardCategory, number>;
+    awardHistoryIncomplete: boolean;
+    ownConsole: boolean;
+    consoleUsers: number;
+    consoleReleaseCount: number;
+    consoleSoftwareSales: number;
+  } | null;
 };
 
 /** Permanent simulation state. UI modals, animation and toast state never live here. */
@@ -208,6 +250,9 @@ export type GameState = {
   platformLicenses: string[];
   companyLevel: number;
   awards: number;
+  awardHistory: AnnualAwards[];
+  lastAwardYear: number;
+  awardHistoryIncomplete: boolean;
   ownConsole: boolean;
   consoleUsers: number;
   lastEventKey: string;
@@ -220,6 +265,7 @@ export type GameState = {
   careerManuals: number;
   endingShown: boolean;
   endingScore: number;
+  endingReport: EndingReport | null;
   inventory: Inventory;
   merchantYear: number;
   merchantPurchases: number;
@@ -259,6 +305,7 @@ export type EventData = {
 export type ReviewData = {
   name: string;
   scores: number[];
+  details?: ReviewDetail[];
   sales: number;
   income: number;
   audience: string;

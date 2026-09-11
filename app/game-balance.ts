@@ -12,7 +12,7 @@ export type BalanceStaff = {
   salary?: number;
 };
 
-export const BALANCE_VERSION = 6;
+export const BALANCE_VERSION = 7;
 export const STARTING_CASH = 500;
 export const STARTING_FANS = 0;
 export const STARTING_RESEARCH = 10;
@@ -166,7 +166,7 @@ export function getReviewBase(qualities: Pick<{ fun: number; creativity: number;
   return (qualities.fun + qualities.creativity + qualities.graphics + qualities.sound) / 32;
 }
 
-export function getReviewScores(input: {
+export function getReviewDetails(input: {
   qualities: { fun: number; creativity: number; graphics: number; sound: number };
   isGreatCombo: boolean;
   reputation: number;
@@ -176,9 +176,29 @@ export function getReviewScores(input: {
   const base = getReviewBase(input.qualities);
   const combo = input.isGreatCombo ? COMBO_REVIEW_BONUS : 0;
   const bugPenalty = Math.min(4, input.bugs * .18);
-  return [0.2, 0.7, 1.1, 1.6].map((bonus, index) => Math.max(1, Math.min(10, Math.round(
-    base + combo + bonus + input.reputation / 45 - bugPenalty + input.randomValues[index] * 1.4,
-  ))));
+  const critics = [
+    { name: "妙手", focus: "创意", quality: input.qualities.creativity, styleBonus: .1 },
+    { name: "铁面", focus: "画面", quality: input.qualities.graphics, styleBonus: .7 },
+    { name: "玩家", focus: "趣味", quality: input.qualities.fun, styleBonus: 1.1 },
+    { name: "主编", focus: "音乐", quality: input.qualities.sound, styleBonus: 1.6 },
+  ];
+  return critics.map((critic, index) => {
+    const preference = Math.max(-.5, Math.min(.5, (critic.quality - base * 8) / 48));
+    const reputationBonus = input.reputation / 45;
+    const variation = input.randomValues[index] * 1.4;
+    const rawScore = base + preference + combo + critic.styleBonus + reputationBonus - bugPenalty + variation;
+    return {
+      name: critic.name, focus: critic.focus, base, preference, comboBonus: combo,
+      styleBonus: critic.styleBonus, reputationBonus, bugPenalty, variation, rawScore,
+      score: Math.max(1, Math.min(10, Math.round(rawScore))),
+    };
+  });
+}
+
+export type ReviewDetail = ReturnType<typeof getReviewDetails>[number];
+
+export function getReviewScores(input: Parameters<typeof getReviewDetails>[0]) {
+  return getReviewDetails(input).map(item => item.score);
 }
 
 export function getFirstWeekSales(input: {

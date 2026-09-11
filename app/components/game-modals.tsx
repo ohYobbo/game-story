@@ -1,6 +1,7 @@
 "use client";
 
 import type { Dispatch, SetStateAction } from "react";
+import { EndingReportCard } from "./ending-report";
 
 import { CAREER_REQUIREMENTS, OFFICE_UPGRADE_COSTS, getCareerOptionsFor, getLevelUpCost } from "../game-balance";
 import { getOfficeUnlocks } from "../game/progression";
@@ -59,6 +60,7 @@ import type {
   StaffChallengeInvestment,
 } from "../game/types";
 import { ModalShell, ResultEntries, StaffAvatar, UiIcon } from "./pixel-ui";
+import { AwardRecords, ReviewReasons } from "./award-records";
 
 type GameModalsProps = {
   game: GameState;
@@ -215,8 +217,6 @@ export function GameModals({
     awards,
     reputation,
     fanSegments,
-    endingShown,
-    endingScore,
   } = game;
   const pendingChallenge = project?.kind === "game" ? project.pendingChallenge : undefined;
   const challengeMember = pendingChallenge
@@ -626,14 +626,15 @@ export function GameModals({
               <div><small>最高评分</small><b>{releases.length ? releases.reduce((best, item) => Math.max(best, item.score), 0) : "—"}</b></div>
               <div><small>最高销量</small><b>{releases.length ? releases.reduce((best, item) => Math.max(best, item.sales), 0).toLocaleString() : "—"}</b></div>
               <div><small>累计销量</small><b>{releases.reduce((total, item) => total + item.sales, 0).toLocaleString()}</b></div>
-              <div><small>获奖次数</small><b>{awards}</b></div>
+              <div><small>正向获奖次数</small><b>{awards}</b></div>
               <div><small>业界口碑</small><b>{reputation}</b></div>
             </div>
             <div className="console-record">
               <UiIcon index={21} className={`console-record-icon ${ownConsole ? "online" : ""}`} />
               <span><b>{ownConsole ? "像素盒子" : "尚未推出自研主机"}</b><small>{ownConsole ? `平台用户 ${formatUsers(consoleUsers)}` : "扩建并积累作品后可启动硬件研发"}</small></span>
             </div>
-            {endingShown && <div className="ending-record"><b>20 年资产记录</b><strong>{formatCash(endingScore)}</strong><small>作品纪录见下方完整历史统计</small></div>}
+            {game.endingReport && <EndingReportCard report={game.endingReport} />}
+            <AwardRecords game={game} />
             <div className="fan-segments">
               <div className="fan-title"><b>玩家人群</b><small>作品题材与宣传方式会改变各群体支持度</small></div>
               {([
@@ -665,6 +666,7 @@ export function GameModals({
                   <span><b>{item.name}{item.sequelEligible ? " · 名人堂" : ""}</b><small>{item.audience ?? "受众未知"} · 发售 {item.weeks} 周</small><small>{item.genre ?? "类型未知"} × {item.theme ?? "题材未知"} · {item.combo === undefined ? "组合未知" : `${COMBINATION_RULES[item.combo].label}组合`}</small><small>{item.finalQuality ? `趣味 ${item.finalQuality.fun.toFixed(1)} / 创意 ${item.finalQuality.creativity.toFixed(1)} / 画面 ${item.finalQuality.graphics.toFixed(1)} / 音乐 ${item.finalQuality.sound.toFixed(1)} / 漏洞 ${item.finalQuality.bugs.toFixed(1)}` : "发售品质未知"}</small><small>开发费 {item.developmentCost === undefined ? "未知" : formatCash(item.developmentCost)} · 作品收益 {item.developmentCost === undefined ? "未知" : `${Math.round(item.income - item.developmentCost).toLocaleString()} 千`}</small></span>
                   <em>{item.score}/40</em>
                   <strong>{item.sales.toLocaleString()} 套<small>本周 {(item.weeklySales ?? 0).toLocaleString()} · 第 {item.weeklyRank ?? "—"} 名</small></strong>
+                  <ReviewReasons details={item.reviewDetails} />
                 </div>
               )) : <p>还没有发售作品。第一部传奇正等着你！</p>}
             </div>
@@ -740,6 +742,7 @@ export function GameModals({
               </div>
               <h2>{eventData.headline}</h2>
               <p>{eventData.body}</p>
+              {eventData.kind === "ending" && game.endingReport && <EndingReportCard report={game.endingReport} />}
               {eventData.reward && <strong className="event-reward">{eventData.reward}</strong>}
               {eventData.results && <ResultEntries entries={eventData.results} />}
               {eventData.kind === "expo" ? (
@@ -765,6 +768,7 @@ export function GameModals({
                 {review.scores.map((score, index) => <div key={index}><span>{["妙手", "铁面", "玩家", "主编"][index]}</span><b>{score}</b><small>/10</small></div>)}
               </div>
               <div className="review-total">总分 <b>{review.scores.reduce((sum, score) => sum + score, 0)}</b><span>/40</span></div>
+              <ReviewReasons details={review.details} open />
               <div className="sales-result">
                 <span>首周销量 <b>{review.sales.toLocaleString()}</b> 套</span>
                 <span>首周排行 <b>第 {review.salesRank} 名</b></span>

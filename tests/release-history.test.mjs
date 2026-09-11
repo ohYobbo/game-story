@@ -39,9 +39,9 @@ test("more than 32 releases preserve totals, old records, and long-tail sales ac
   const tick = applyGameAction(state, { type: "tick", isNewWeek: true }, () => .5).state;
   assert.ok(tick.releases[39].sales > 1_000_000);
   assert.ok(tick.releases.reduce((sum, item) => sum + item.sales, 0) > total);
-  const ending = applyGameAction({ ...tick, year: 20 }, { type: "scheduled-event" }, () => .5);
-  assert.match(ending.effects[0].event.body, /最早纪录/);
-  assert.match(ending.effects[0].event.body, /作品收益最高《最早纪录》/);
+  const ending = applyGameAction({ ...tick, year: 20, lastAwardYear: 19 }, { type: "scheduled-event" }, () => .5);
+  assert.equal(ending.state.endingReport.performance.bestSeller.name, "最早纪录");
+  assert.equal(ending.state.endingReport.performance.bestProfit.name, "最早纪录");
 });
 
 test("release snapshots freeze final quality, bugs, combination and known development cost", () => {
@@ -67,9 +67,9 @@ test("legacy migration keeps unknown facts unknown and never guesses ambiguous s
   assert.deepEqual(roundTrip(migrated), migrated);
   const ambiguous = migrateSave({ ...legacy, releases: [...legacy.releases, ...legacy.releases] });
   assert.equal(ambiguous.project.sequelOfId, undefined);
-  const ending = applyGameAction({ ...migrated, year: 20 }, { type: "scheduled-event" });
-  assert.match(ending.effects[0].event.body, /作品收益未知/);
-  assert.match(ending.effects[0].event.body, /旧记录不完整/);
+  const ending = applyGameAction({ ...migrated, year: 20, lastAwardYear: 19 }, { type: "scheduled-event" });
+  assert.equal(ending.state.endingReport.performance.bestProfit, null);
+  assert.equal(ending.state.endingReport.performance.releaseHistoryIncomplete, true);
 });
 
 test("migration allocates beyond retained IDs and prevents future collisions", () => {

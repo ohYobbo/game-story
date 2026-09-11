@@ -72,7 +72,7 @@ test("waiting survives save reload and resumes without restarting recovery", () 
 });
 
 test("waiting advances annual payroll once and still requires a lead after the event", () => {
-  let state = applyGameAction(stranded({ year: 2, month: 2, week: 4, cash: 100 }), { type: "wait-for-stage-lead" }).state;
+  let state = applyGameAction(stranded({ year: 2, month: 2, week: 4, cash: 100, lastAwardYear: 1 }), { type: "wait-for-stage-lead" }).state;
   for (let tick = 1; tick <= 4; tick += 1) state = applyGameAction(state, { type: "tick", isNewWeek: tick === 4 }).state;
   assert.equal(state.month, 3);
   assert.equal(state.week, 1);

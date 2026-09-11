@@ -14,7 +14,7 @@ import {
 import type { GameState, LegacySaveState, SaveState } from "./types";
 import { combinationKey } from "./combinations.ts";
 
-export const SAVE_SCHEMA_VERSION = 9;
+export const SAVE_SCHEMA_VERSION = 11;
 export const SAVE_STORAGE_KEY = "pixel-studio-save";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -137,6 +137,13 @@ export function migrateSave(value: unknown): GameState | null {
     releaseHistoryIncomplete: saved.releaseHistoryIncomplete ?? (releases.length > 0 && (saved.schemaVersion ?? 0) < 7),
     companyLevel,
     awards: saved.awards ?? 0,
+    awardHistory: structuredClone(saved.awardHistory ?? []),
+    // Legacy December saves may already include that year's old ceremony rewards.
+    // Preserve totals and conservatively skip unverifiable past ceremonies.
+    lastAwardYear: (saved.schemaVersion ?? 0) < 10
+      ? Math.max(0, saved.year - (saved.month === 12 ? 0 : 1))
+      : saved.lastAwardYear ?? 0,
+    awardHistoryIncomplete: saved.awardHistoryIncomplete || ((saved.schemaVersion ?? 0) < 10 && (saved.year > 1 || saved.month === 12 || (saved.awards ?? 0) > 0)),
     ownConsole: saved.ownConsole ?? false,
     consoleUsers: saved.consoleUsers ?? 0,
     lastEventKey: saved.lastEventKey ?? "",
@@ -155,6 +162,8 @@ export function migrateSave(value: unknown): GameState | null {
     careerManuals: saved.careerManuals ?? 0,
     endingShown: saved.endingShown ?? false,
     endingScore: saved.endingScore ?? 0,
+    endingReport: saved.endingReport ? structuredClone(saved.endingReport)
+      : saved.endingShown ? { settledAt: null, cash: saved.endingScore ?? 0, performance: null } : null,
     inventory: { ...(saved.inventory ?? INITIAL_INVENTORY) },
     merchantYear: saved.merchantYear ?? 0,
     merchantPurchases: saved.merchantPurchases ?? 0,
@@ -179,6 +188,8 @@ export function serializeGameState(state: GameState): SaveState {
     lastStageLeads: { ...state.lastStageLeads },
     combinationDiscoveries: { ...state.combinationDiscoveries },
     platformLicenses: [...state.platformLicenses],
+    awardHistory: structuredClone(state.awardHistory),
+    endingReport: structuredClone(state.endingReport),
     schemaVersion: SAVE_SCHEMA_VERSION,
     balanceVersion: BALANCE_VERSION,
   };
